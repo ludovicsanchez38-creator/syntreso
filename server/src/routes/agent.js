@@ -4,8 +4,9 @@ import { regenerateDigest } from '../services/digest.js'
 
 const router = Router()
 
-// Assistant désactivé (pas de clé, ou SYNTRESO_ASSISTANT=non) : les routes qui font
-// travailler le modèle répondent 503 avec la raison, tout le reste de l'appli marche.
+// Assistant coupé (pas de clé d'API, SYNTRESO_ASSISTANT=non ou "assistant.actif": false
+// dans les réglages) : les routes qui font travailler le modèle répondent 503 avec la
+// raison, sans rien lancer ; tout le reste de l'appli marche.
 function exigeAssistant(_req, res, next) {
   const statut = assistantStatus()
   if (!statut.available) return res.status(503).json({ error: `assistant indisponible : ${statut.raison}` })
@@ -25,7 +26,7 @@ router.post('/digest', async (_req, res, next) => {
 router.get('/status', async (_req, res) => {
   const statut = assistantStatus()
   const available = statut.available ? await checkClaudeAvailable() : false
-  res.json({ available, raison: available ? statut.raison : (statut.available ? 'exécutable Claude introuvable (CLAUDE_BIN)' : statut.raison) })
+  res.json({ available, raison: available ? statut.raison : (statut.available ? 'Agent SDK non installé ou exécutable Claude introuvable (CLAUDE_BIN)' : statut.raison) })
 })
 
 // POST /api/agent/ask { question } -> flux SSE { type: chunk | proposal | proposal_error | done | error }

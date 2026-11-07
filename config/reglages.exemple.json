@@ -1,5 +1,9 @@
 {
   "_lisezMoi": "Réglages de Syntréso. Copiez ce fichier en config/reglages.json et adaptez-le. Les clés qui commencent par _ sont des commentaires (ignorées). Une clé absente reprend la valeur par défaut. Documentation complète : docs/REGLAGES.md",
+  "assistant": {
+    "_doc": "Interrupteur de l'assistant IA. false : coupé, aucun appel à Anthropic (comme SYNTRESO_ASSISTANT=non). true : actif seulement si ANTHROPIC_API_KEY est renseignée dans .env.",
+    "actif": true
+  },
   "indy": {
     "_doc": "Lecture des exports Indy (grand livre + balance). Numéros de comptes du plan comptable, comparés par début de numéro (512 couvre 512000, 512100...).",
     "comptesBancaires": {

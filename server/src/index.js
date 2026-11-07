@@ -125,7 +125,7 @@ app.listen(PORT, HOST, async () => {
     if (await checkClaudeAvailable()) {
       pregenerateContent() // en tâche de fond, sans bloquer le démarrage
     } else {
-      console.warn('[assistant] exécutable Claude introuvable : assistant indisponible')
+      console.warn('[assistant] Agent SDK non installé ou exécutable Claude introuvable : assistant indisponible')
     }
   }
 })

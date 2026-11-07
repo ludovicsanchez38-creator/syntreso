@@ -70,7 +70,7 @@ export function AgentPanel() {
       <div ref={scrollRef} className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-3 py-4">
         {!available && (
           <div className="rounded-lg border border-warning/50 bg-warning/5 p-3 text-xs">
-            L'assistant IA est désactivé{unavailableReason ? ` : ${unavailableReason}` : ''}. Le reste de l'application fonctionne normalement (voir le README, section assistant).
+            L'assistant IA est coupé{unavailableReason ? ` : ${unavailableReason}` : ''}. Aucune donnée n'est envoyée et le reste de l'application fonctionne normalement (voir le README, section assistant).
           </div>
         )}
 

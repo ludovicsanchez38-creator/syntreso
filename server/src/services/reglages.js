@@ -10,6 +10,12 @@ import { readFileSync, existsSync } from 'node:fs'
 import { reglagesPath } from './paths.js'
 
 export const REGLAGES_PAR_DEFAUT = {
+  assistant: {
+    // Interrupteur général de l'assistant IA. false = coupé : aucune génération, aucun
+    // appel à Anthropic, le SDK n'est pas chargé (équivaut à SYNTRESO_ASSISTANT=non).
+    // true = actif seulement si ANTHROPIC_API_KEY est renseignée.
+    actif: true,
+  },
   indy: {
     // Comptes bancaires lus dans le grand livre. Un numéro est reconnu s'il COMMENCE
     // par l'une des valeurs de `courant` (512 couvre 512000, 512100...) ou s'il figure

@@ -4,10 +4,10 @@ Syntréso se règle à deux endroits, chacun avec son rôle :
 
 | Fichier | Contient | Qui le modifie |
 |---|---|---|
-| `config/reglages.json` | La façon de lire la compta Indy (comptes, règles de classement), les hypothèses du prévisionnel de base, le connecteur Twenty | Vous ou votre agent, à l'installation puis de temps en temps |
+| `config/reglages.json` | L'interrupteur de l'assistant IA, la façon de lire la compta Indy (comptes, règles de classement), les hypothèses du prévisionnel de base, le connecteur Twenty | Vous ou votre agent, à l'installation puis de temps en temps |
 | `donnees/company.json` | L'identité de l'entreprise, le seuil de sécurité, les réglages fiscaux (TVA, cotisations, IS) | Créé par `npm run init`, complété par l'import Indy, ajustable à la main |
 
-`config/reglages.json` est relu à chaque import et à chaque synchronisation Twenty : pas besoin de redémarrer. Après une modification de `company.json`, redémarrez le serveur ou lancez un import.
+`config/reglages.json` est relu à chaque import, à chaque synchronisation Twenty et à chaque demande faite à l'assistant : pas besoin de redémarrer. Après une modification de `company.json`, redémarrez le serveur ou lancez un import.
 
 Une clé absente de `config/reglages.json` reprend sa valeur par défaut (celles de `config/reglages.exemple.json`). Attention : une liste (par exemple `reglesCategories`) remplace entièrement la liste par défaut, elle ne s'y ajoute pas. Les clés qui commencent par `_` sont des commentaires.
 
@@ -135,7 +135,15 @@ Une opportunité avec une date de clôture est rattachée à son mois ; sans dat
 
 ---
 
-## 4. Réglages de l'entreprise (`donnees/company.json`)
+## 4. Assistant IA (`assistant`)
+
+- `actif` : `true` par défaut. `false` coupe entièrement l'assistant : aucune génération, aucun appel à Anthropic, le module de l'Agent SDK n'est même pas chargé. Même effet que `SYNTRESO_ASSISTANT=non` dans `.env` ; il suffit que l'un des deux soit coupé.
+
+Allumé, l'assistant ne fonctionne qu'avec une clé d'API Anthropic (`ANTHROPIC_API_KEY` dans `.env`) : sans clé, il reste coupé. Rechargez la page après un changement pour que l'interface le prenne en compte.
+
+---
+
+## 5. Réglages de l'entreprise (`donnees/company.json`)
 
 Créé par `npm run init`. Champs principaux :
 

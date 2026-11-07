@@ -28,7 +28,7 @@ interface AgentContextValue {
   proactiveSeen: boolean
   markProactiveSeen: () => void
   available: boolean
-  /** raison affichée quand l'assistant est désactivé (pas de clé, SYNTRESO_ASSISTANT=non) */
+  /** raison affichée quand l'assistant est coupé (pas de clé d'API, SYNTRESO_ASSISTANT=non, réglage assistant.actif) */
   unavailableReason: string | null
 }
 
@@ -137,7 +137,8 @@ export function AgentProvider({ children }: { children: ReactNode }) {
         proactive: proactive.data,
         proactiveSeen,
         markProactiveSeen: () => setProactiveSeen(true),
-        available: status.data?.available ?? true,
+        // tant que le statut n'est pas connu, l'assistant est considéré comme coupé
+        available: status.data?.available === true,
         unavailableReason: status.data?.available === false ? status.data.raison ?? null : null,
       }}
     >

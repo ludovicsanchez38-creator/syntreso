@@ -22,7 +22,7 @@ export function AgentCommandBar() {
   const [open, setOpen] = useState(false)
   const [value, setValue] = useState('')
   const [busyHint, setBusyHint] = useState(false)
-  const { ask } = useAgent()
+  const { ask, available, unavailableReason } = useAgent()
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -36,6 +36,7 @@ export function AgentCommandBar() {
   }, [])
 
   const send = (question: string) => {
+    if (!available) return // assistant coupé : rien n'est envoyé
     // si l'assistant rédige déjà, on garde le dialog ouvert et on prévient au lieu
     // de jeter silencieusement la question
     if (!ask(question)) {
@@ -54,14 +55,19 @@ export function AgentCommandBar() {
         value={value}
         onValueChange={setValue}
       />
+      {!available && (
+        <p className="border-b px-4 py-2 text-xs text-muted-foreground">
+          L'assistant IA est coupé{unavailableReason ? ` : ${unavailableReason}` : ''}.
+        </p>
+      )}
       {busyHint && (
         <p className="border-b px-4 py-2 text-xs text-destructive">
           L'assistant rédige déjà une réponse : attendez la fin avant d'envoyer une nouvelle question.
         </p>
       )}
       <CommandList>
-        <CommandEmpty>Appuyez sur Entrée pour envoyer votre question.</CommandEmpty>
-        {value.trim() && (
+        <CommandEmpty>{available ? 'Appuyez sur Entrée pour envoyer votre question.' : 'Aucune question possible tant que l’assistant est coupé.'}</CommandEmpty>
+        {available && value.trim() && (
           <CommandGroup heading="Votre question">
             <CommandItem onSelect={() => send(value.trim())} value={`ask-${value}`}>
               <Sparkles className="size-4 text-primary" />
@@ -69,14 +75,16 @@ export function AgentCommandBar() {
             </CommandItem>
           </CommandGroup>
         )}
-        <CommandGroup heading="Suggestions">
-          {SUGGESTIONS.map((s) => (
-            <CommandItem key={s} onSelect={() => send(s)} value={s}>
-              <MessageCircleQuestion className="size-4 text-muted-foreground" />
-              {s}
-            </CommandItem>
-          ))}
-        </CommandGroup>
+        {available && (
+          <CommandGroup heading="Suggestions">
+            {SUGGESTIONS.map((s) => (
+              <CommandItem key={s} onSelect={() => send(s)} value={s}>
+                <MessageCircleQuestion className="size-4 text-muted-foreground" />
+                {s}
+              </CommandItem>
+            ))}
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   )

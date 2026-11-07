@@ -1,11 +1,13 @@
 // Assistant Syntréso - Claude Agent SDK, outils branchés sur le moteur de calcul.
 //
 // - cwd = <données>/assistant/ : CLAUDE.md (system prompt) + DONNEES.md + MEMOIRE.md (@import)
-// - auth : ANTHROPIC_API_KEY (clé API) ou CLAUDE_CODE_OAUTH_TOKEN (abonnement Claude), ou
-//   la session Claude Code déjà connectée sur la machine (SYNTRESO_ASSISTANT=oui). Le SDK
-//   lance le CLI Claude Code embarqué (ou CLAUDE_BIN si défini).
-// - activation : SYNTRESO_ASSISTANT=auto (défaut : actif seulement si une clé est
-//   présente), oui, ou non. Désactivé, l'appli fonctionne entièrement sans assistant.
+// - accès : UNIQUEMENT la clé d'API Anthropic de l'utilisateur (ANTHROPIC_API_KEY). La
+//   documentation de l'Agent SDK interdit aux logiciels tiers de proposer la connexion
+//   claude.ai sans accord préalable d'Anthropic : aucune autre voie n'est lue ni transmise.
+//   Le SDK lance le programme Claude Code qu'il embarque (ou CLAUDE_BIN si défini).
+// - interrupteur : SYNTRESO_ASSISTANT=non (environnement) ou "assistant": { "actif": false }
+//   (config/reglages.json) coupent tout. Coupé, le SDK n'est même pas chargé et aucun
+//   appel ne part ; l'appli fonctionne entièrement sans assistant.
 // - outils : serveur MCP IN-PROCESS (agent-tools.js) branché sur le moteur, lecture
 //   seule + propositions validées par l'humain. Les outils builtin (Bash, Read...)
 //   restent deny par agent-workspace/.claude/settings.json (settingSources: project)
@@ -16,7 +18,6 @@
 //   si une génération est déjà en cours.
 
 import { spawn } from 'node:child_process'
-import { query } from '@anthropic-ai/claude-agent-sdk'
 import { readJsonOr, writeJson, withDataLock, appendAuditInLock, updateJson, appendAudit } from './store.js'
 import { loadState, monthOf, monthRange, todayFor } from './projection.js'
 import { autoManagedCategoryIds } from './fiscal.js'
@@ -25,41 +26,74 @@ import { onDataChanged } from './events.js'
 import { workspace } from './digest.js'
 import { appendMemoire } from './memoire.js'
 import { buildSyntresoServer } from './agent-tools.js'
+import { lireReglages } from './reglages.js'
 
 // ------------------------------------------------------------------ Activation
-const OUI = new Set(['oui', 'on', '1', 'true', 'yes'])
+const SDK = '@anthropic-ai/claude-agent-sdk'
 const NON = new Set(['non', 'off', '0', 'false', 'no'])
+// « oui » est accepté pour compatibilité : il vaut « auto » (la clé reste exigée).
+const AUTO = new Set(['auto', '', 'oui', 'on', '1', 'true', 'yes'])
 
 /**
  * L'assistant est-il activé ? Ne contacte rien : lit seulement la configuration.
- * Retourne { available, raison }.
+ * Retourne { available, raison }. Toute incertitude coupe l'assistant (valeur inconnue,
+ * réglages illisibles) : il ne s'allume que sur une configuration claire.
  */
 export function assistantStatus() {
-  const mode = String(process.env.SYNTRESO_ASSISTANT || 'auto').trim().toLowerCase()
-  if (NON.has(mode)) return { available: false, raison: 'réglé sur SYNTRESO_ASSISTANT=non' }
-  if (OUI.has(mode)) return { available: true, raison: 'réglé sur SYNTRESO_ASSISTANT=oui' }
-  const cle = (process.env.ANTHROPIC_API_KEY || '').trim() || (process.env.CLAUDE_CODE_OAUTH_TOKEN || '').trim()
-  if (cle) return { available: true, raison: 'clé Anthropic présente' }
-  return {
-    available: false,
-    raison: "aucune clé : renseigner ANTHROPIC_API_KEY (ou CLAUDE_CODE_OAUTH_TOKEN) dans .env, ou SYNTRESO_ASSISTANT=oui si Claude Code est déjà connecté sur cette machine",
+  const mode = String(process.env.SYNTRESO_ASSISTANT ?? 'auto').trim().toLowerCase()
+  if (NON.has(mode)) return { available: false, raison: 'coupé par SYNTRESO_ASSISTANT=non' }
+  if (!AUTO.has(mode)) {
+    return { available: false, raison: `valeur inconnue SYNTRESO_ASSISTANT=${mode.slice(0, 20)} (auto ou non) : assistant coupé` }
   }
+  let reglages
+  try {
+    reglages = lireReglages()
+  } catch (err) {
+    return { available: false, raison: `réglages illisibles, assistant coupé par précaution (${err.message})` }
+  }
+  if (reglages.assistant?.actif === false) {
+    return { available: false, raison: 'coupé dans les réglages (config/reglages.json : "assistant": { "actif": false })' }
+  }
+  if (!(process.env.ANTHROPIC_API_KEY || '').trim()) {
+    return { available: false, raison: "aucune clé : renseigner ANTHROPIC_API_KEY dans .env (clé d'API créée sur la console Anthropic)" }
+  }
+  return { available: true, raison: "clé d'API Anthropic présente" }
 }
 
-// Variables transmises au processus Claude : tout l'environnement SAUF les secrets
-// propres à Syntréso (jeton d'accès, clé Twenty, réglages Cloudflare). L'assistant n'a
-// aucun outil système, c'est une précaution de plus.
-const ENV_RESERVE = /^(SYNTRESO_JETON|TWENTY_KEY|TWENTY_URL|CF_ACCESS_)/
-function envPourAssistant() {
+// Variables transmises au processus Claude : une liste fermée (système, langue, proxy,
+// certificats) plus la clé d'API. Ni les secrets de Syntréso (jeton, clé Twenty,
+// Cloudflare), ni aucune autre forme d'accès (jeton d'abonnement, jeton de passerelle,
+// fournisseur cloud) ne passent : la clé d'API est la seule authentification possible.
+const ENV_TRANSMIS = /^(PATH|HOME|USER|LOGNAME|SHELL|LANG|LANGUAGE|LC_[A-Z_]+|TZ|TERM|TMPDIR|TMP|TEMP|XDG_[A-Z_]+|NODE_EXTRA_CA_CERTS|SSL_CERT_FILE|SSL_CERT_DIR|HTTPS?_PROXY|https?_proxy|NO_PROXY|no_proxy|ALL_PROXY|all_proxy)$/
+export function envPourAssistant() {
   const env = {}
   for (const [k, v] of Object.entries(process.env)) {
-    if (ENV_RESERVE.test(k)) continue
-    // une clé vide (ligne « ANTHROPIC_API_KEY= » du .env) ne doit pas masquer la session
-    // Claude Code déjà connectée sur la machine
-    if (/^(ANTHROPIC_API_KEY|CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_AUTH_TOKEN)$/.test(k) && !String(v).trim()) continue
-    env[k] = v
+    if (ENV_TRANSMIS.test(k) && v !== undefined) env[k] = v
   }
+  env.ANTHROPIC_API_KEY = String(process.env.ANTHROPIC_API_KEY || '').trim()
+  // ni mise à jour automatique, ni télémétrie, ni rapport d'erreur (documentation Claude Code)
+  env.CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = '1'
+  env.CLAUDE_AGENT_SDK_CLIENT_APP = 'syntreso/1.0.0'
   return env
+}
+
+// Le SDK n'est chargé qu'au premier usage réel de l'assistant : coupé, il n'est jamais
+// importé (et l'appli démarre même s'il n'est pas installé : npm ci --omit=optional).
+let sdkPromise = null
+function chargerSdk() {
+  sdkPromise ??= import(SDK).catch((err) => {
+    sdkPromise = null
+    throw new Error(`module ${SDK} absent ou illisible (${err.code || err.message}) : réinstaller les dépendances sans --omit=optional`)
+  })
+  return sdkPromise
+}
+function sdkInstalle() {
+  try {
+    import.meta.resolve(SDK)
+    return true
+  } catch {
+    return false
+  }
 }
 
 const CLAUDE_BIN = process.env.CLAUDE_BIN || ''
@@ -73,11 +107,19 @@ const HARD_TIMEOUT_MS = Number(process.env.SYNTRESO_AGENT_TIMEOUT_MS) || 180_000
 // ------------------------------------------------------------------ Outils MCP in-process
 // Les handlers d'outils poussent leurs événements (proposal) ici ; la génération en
 // cours draine ce buffer entre deux messages du stream. Sûr car mono-ask (sémaphore).
+// Le serveur d'outils est construit au premier usage (il dépend du SDK, chargé à la demande).
 const toolEvents = []
-const { server: syntresoServer, allowedTools: SYNTRESO_TOOLS } = buildSyntresoServer({
-  createProposalFromPayload,
-  emit: (evt) => toolEvents.push(evt),
-})
+let outilsPromise = null
+function outilsSyntreso() {
+  outilsPromise ??= buildSyntresoServer({
+    createProposalFromPayload,
+    emit: (evt) => toolEvents.push(evt),
+  }).catch((err) => {
+    outilsPromise = null
+    throw err
+  })
+  return outilsPromise
+}
 
 // ------------------------------------------------------------------ Session suivie
 const SESSION_TTL_MS = 15 * 60_000
@@ -133,6 +175,7 @@ export async function* streamAgentResponse({ question, newConversation = false }
     const resume =
       currentSessionId && Date.now() - sessionTouchedAt < SESSION_TTL_MS ? currentSessionId : undefined
 
+    const [{ query }, { server: syntresoServer, allowedTools: SYNTRESO_TOOLS }] = await Promise.all([chargerSdk(), outilsSyntreso()])
     const stream = query({
       prompt: question,
       options: {
@@ -562,11 +605,12 @@ export async function pregenerateContent() {
 
 export async function checkClaudeAvailable() {
   if (!assistantStatus().available) return false
+  if (!sdkInstalle()) return false
   // CLAUDE_BIN non défini -> le SDK utilise son exécutable embarqué (node_modules),
   // toujours présent après npm install : disponible. Sinon, vérifier le binaire.
   if (!CLAUDE_BIN) return true
   return new Promise((resolve) => {
-    const proc = spawn(CLAUDE_BIN, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'] })
+    const proc = spawn(CLAUDE_BIN, ['--version'], { stdio: ['ignore', 'pipe', 'pipe'], env: envPourAssistant() })
     proc.on('error', () => resolve(false))
     proc.on('exit', (code) => resolve(code === 0))
   })

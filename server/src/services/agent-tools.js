@@ -9,9 +9,9 @@
 //
 // buildSyntresoServer est une factory à injection : `createProposalFromPayload` vit
 // dans agent.js (avec la validation et le verrou) et `emit` pousse les événements
-// proposal vers la génération SSE en cours - pas de cycle d'import.
+// proposal vers la génération SSE en cours - pas de cycle d'import. Elle charge le SDK
+// à la demande : tant que l'assistant ne sert pas, le SDK n'est jamais importé.
 
-import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { loadState, project, kpis, dataFreshness, reconciliation, monthOf, todayFor } from './projection.js'
 import { forecastImpact, remunerationCheck, ccaRepaymentCheck } from './decision.js'
@@ -22,7 +22,8 @@ const asError = (message) => ({ content: [{ type: 'text', text: message }], isEr
 
 const MONTH_RE = /^\d{4}-(0[1-9]|1[0-2])$/
 
-export function buildSyntresoServer({ createProposalFromPayload, emit }) {
+export async function buildSyntresoServer({ createProposalFromPayload, emit }) {
+  const { tool, createSdkMcpServer } = await import('@anthropic-ai/claude-agent-sdk')
   const tools = [
     tool(
       'get_kpis',

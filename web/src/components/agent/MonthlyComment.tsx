@@ -4,10 +4,13 @@ import Markdown from 'react-markdown'
 import { Check, Copy, FileText, LoaderCircle, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { useAgent } from './AgentContext'
 
 // Le livrable de la séance de pilotage : commentaire du mois généré par l'agent,
 // pré-généré au boot du serveur (cache) pour un affichage instantané en démo.
+// Assistant coupé : le bouton n'apparaît pas et aucune requête n'est faite.
 export function MonthlyComment() {
+  const { available } = useAgent()
   const [open, setOpen] = useState(false)
   const [copied, setCopied] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -19,10 +22,12 @@ export function MonthlyComment() {
       if (!res.ok) throw new Error('génération impossible')
       return (await res.json()) as { text: string; generatedAt: string }
     },
-    enabled: open,
+    enabled: open && available,
     staleTime: Infinity,
     retry: false,
   })
+
+  if (!available) return null
 
   const refresh = async () => {
     setRefreshing(true)
