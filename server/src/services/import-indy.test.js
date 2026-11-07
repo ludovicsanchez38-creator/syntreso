@@ -67,6 +67,11 @@ test('import complet : réconciliation exacte, sous-compte consolidé, classemen
   assert.ok(dupont.every((t) => t.categoryId === 'dec_remuneration'))
   assert.ok(r.transactions.filter((t) => /CLIENT ALPHA/.test(t.label)).every((t) => t.categoryId === 'enc_prestations'))
   assert.equal(r.transactions.find((t) => /Apport/.test(t.label)).categoryId, 'enc_apport')
+  // libellés génériques des règles par défaut : forfait télécom et abonnement logiciel
+  assert.ok(r.transactions.filter((t) => /TELECOM DURANCE/.test(t.label)).every((t) => t.categoryId === 'dec_telecom'))
+  assert.ok(r.transactions.filter((t) => /ABONNEMENT LOGICIEL/.test(t.label)).every((t) => t.categoryId === 'dec_abonnements'))
+  // aucun mouvement ne tombe dans la catégorie par défaut avec les réglages fictifs
+  assert.deepEqual(r.transactions.filter((t) => /_divers$/.test(t.categoryId)).map((t) => t.label), [])
   // balance : réserve TVA, dette de TVA réelle, compte courant d'associé
   assert.equal(r.company.provisionsHeld.tvaCents, 250_000)
   assert.equal(r.company.fiscal.vatDueActualCents, 680_000 - 140_471)
