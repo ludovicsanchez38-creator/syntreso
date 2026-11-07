@@ -51,7 +51,7 @@ La démonstration installe une entreprise fictive du bâtiment, Bâti Provence, 
 Sur Linux ou Mac, avec **Node.js 22 ou plus récent** :
 
 ```bash
-git clone <adresse-du-dépôt> syntreso && cd syntreso
+git clone https://github.com/ludovicsanchez38-creator/syntreso.git syntreso && cd syntreso
 npm --prefix server ci --omit=dev
 JETON=$(openssl rand -hex 32)
 sed "s/^SYNTRESO_JETON=.*/SYNTRESO_JETON=$JETON/; s/^SYNTRESO_ASSISTANT=.*/SYNTRESO_ASSISTANT=non/" .env.exemple > .env && chmod 600 .env
@@ -93,7 +93,7 @@ Pour essayer l'import Indy sans vos données, `exemples/indy-fictif/` contient d
 Prérequis : un serveur Linux avec Docker et le greffon `docker compose`.
 
 ```bash
-git clone <adresse-du-dépôt> syntreso   # ou copiez le dossier sur le serveur
+git clone https://github.com/ludovicsanchez38-creator/syntreso.git syntreso   # ou copiez le dossier sur le serveur
 cd syntreso
 ./install-vps.sh
 ```
