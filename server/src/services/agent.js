@@ -41,18 +41,18 @@ const AUTO = new Set(['auto', '', 'oui', 'on', '1', 'true', 'yes'])
  */
 export function assistantStatus() {
   const mode = String(process.env.SYNTRESO_ASSISTANT ?? 'auto').trim().toLowerCase()
-  if (NON.has(mode)) return { available: false, raison: 'coupé par SYNTRESO_ASSISTANT=non' }
+  if (NON.has(mode)) return { available: false, raison: "SYNTRESO_ASSISTANT=non dans l'environnement" }
   if (!AUTO.has(mode)) {
-    return { available: false, raison: `valeur inconnue SYNTRESO_ASSISTANT=${mode.slice(0, 20)} (auto ou non) : assistant coupé` }
+    return { available: false, raison: `valeur inconnue SYNTRESO_ASSISTANT=${mode.slice(0, 20)} (attendu : auto ou non)` }
   }
   let reglages
   try {
     reglages = lireReglages()
   } catch (err) {
-    return { available: false, raison: `réglages illisibles, assistant coupé par précaution (${err.message})` }
+    return { available: false, raison: `réglages illisibles, par précaution (${err.message})` }
   }
   if (reglages.assistant?.actif === false) {
-    return { available: false, raison: 'coupé dans les réglages (config/reglages.json : "assistant": { "actif": false })' }
+    return { available: false, raison: 'réglage "assistant": { "actif": false } dans config/reglages.json' }
   }
   if (!(process.env.ANTHROPIC_API_KEY || '').trim()) {
     return { available: false, raison: "aucune clé : renseigner ANTHROPIC_API_KEY dans .env (clé d'API créée sur la console Anthropic)" }
