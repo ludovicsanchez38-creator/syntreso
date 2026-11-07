@@ -315,7 +315,7 @@ async function validateProposal(payload) {
  * serveur MCP : le schéma d'entrée a validé les types, validateProposal valide le
  * métier). Remplace l'ancien createProposal(rawJson) du protocole de marqueurs.
  */
-async function createProposalFromPayload(payload) {
+export async function createProposalFromPayload(payload) {
   const invalid = await validateProposal(payload)
   if (invalid) return { error: `proposition rejetée : ${invalid}` }
 
@@ -327,9 +327,7 @@ async function createProposalFromPayload(payload) {
     kind: payload.kind,
     payload,
   }
-  const proposals = await readJsonOr('proposals', [])
-  proposals.push(proposal)
-  await writeJson('proposals', proposals)
+  await updateJson('proposals', (proposals) => [...proposals, proposal], [])
   return { proposal }
 }
 
