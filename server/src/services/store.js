@@ -1,5 +1,7 @@
-import { readFile, writeFile, rename, mkdir, appendFile } from 'node:fs/promises'
+import { readFile, writeFile, rename, mkdir, appendFile, open } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
+import { DatabaseSync } from 'node:sqlite'
+import { AsyncLocalStorage } from 'node:async_hooks'
 import path from 'node:path'
 import { dataDir } from './paths.js'
 
@@ -12,12 +14,13 @@ import { dataDir } from './paths.js'
 // last-write-wins (deux confirmations concurrentes, un PATCH forecast pendant un
 // resolveProposal, un import). Toute mutation passe par cette file.
 let opChain = Promise.resolve()
+const lockContext = new AsyncLocalStorage()
 
 // Sérialise une opération asynchrone arbitraire sur les données. La file ignore les
 // rejets précédents (catch interne) pour qu'une erreur sur une opération ne bloque
 // pas définitivement les suivantes. Retourne la valeur (ou la rejection) de `fn`.
 export function withDataLock(fn) {
-  const run = opChain.then(fn)
+  const run = opChain.then(() => lockContext.run(true, fn))
   opChain = run.then(
     () => undefined,
     () => undefined,
@@ -25,29 +28,87 @@ export function withDataLock(fn) {
   return run
 }
 
+// Une lecture groupée attend les mutations ; dans une mutation déjà verrouillée,
+// elle réutilise la section critique (validation et listeners de l'assistant).
+export function withDataSnapshot(fn) {
+  return lockContext.getStore() ? fn() : withDataLock(fn)
+}
+
 export function dataPath(name) {
   return path.join(dataDir(), `${name}.json`)
 }
 
 export async function readJson(name) {
+  const journal = path.join(dataDir(), 'mutations.sqlite')
+  if (existsSync(journal)) {
+    const db = new DatabaseSync(journal, { readOnly: true })
+    try {
+      const row = db.prepare('SELECT value FROM documents WHERE name = ?').get(name)
+      if (row) return JSON.parse(row.value)
+    } finally {
+      db.close()
+    }
+  }
   const raw = await readFile(dataPath(name), 'utf8')
   return JSON.parse(raw)
 }
 
 export async function readJsonOr(name, fallback) {
-  if (!existsSync(dataPath(name))) return fallback
-  return readJson(name)
+  try {
+    return await readJson(name)
+  } catch (err) {
+    if (err.code === 'ENOENT') return fallback
+    throw err
+  }
+}
+
+/**
+ * Commit durable d'un ensemble de documents, DÉJÀ sous withDataLock.
+ * SQLite garde les valeurs validées tant que leur copie JSON n'est pas complète.
+ * En cas de panne ou d'arrêt entre deux renommages, readJson lit ce journal ; la
+ * prochaine écriture reprend toutes les copies en attente avant de vider le journal.
+ * Une panne de copie APRÈS COMMIT ne transforme donc pas un succès métier en échec.
+ */
+export async function writeJsonBatchInLock(documents) {
+  if (!lockContext.getStore()) throw new Error('écriture coordonnée hors verrou')
+  const entries = Object.entries(documents).map(([name, value]) => [name, JSON.stringify(value, null, 2) + '\n'])
+  await mkdir(dataDir(), { recursive: true })
+  const db = new DatabaseSync(path.join(dataDir(), 'mutations.sqlite'))
+  try {
+    db.exec('PRAGMA synchronous = FULL; CREATE TABLE IF NOT EXISTS documents (name TEXT PRIMARY KEY, value TEXT NOT NULL)')
+    db.exec('BEGIN IMMEDIATE')
+    try {
+      const put = db.prepare('INSERT OR REPLACE INTO documents (name, value) VALUES (?, ?)')
+      for (const [name, value] of entries) put.run(name, value)
+      db.exec('COMMIT')
+    } catch (err) {
+      db.exec('ROLLBACK')
+      throw err
+    }
+    try {
+      for (const { name, value } of db.prepare('SELECT name, value FROM documents').all()) {
+        const target = dataPath(name)
+        await writeFile(`${target}.tmp`, value, 'utf8')
+        const file = await open(`${target}.tmp`, 'r+')
+        try { await file.sync() } finally { await file.close() }
+        await rename(`${target}.tmp`, target)
+      }
+      const directory = await open(dataDir(), 'r')
+      try { await directory.sync() } finally { await directory.close() }
+      db.exec('DELETE FROM documents')
+    } catch (err) {
+      console.error('[données] commit conservé dans mutations.sqlite, copie JSON à reprendre :', err.message)
+    }
+  } finally {
+    db.close()
+  }
 }
 
 // Écriture atomique (tmp + rename), sérialisée sur la file unique. Conserve la
 // signature historique (writeJson(name, data) -> Promise).
 export function writeJson(name, data) {
   return withDataLock(async () => {
-    await mkdir(dataDir(), { recursive: true })
-    const target = dataPath(name)
-    const tmp = `${target}.tmp`
-    await writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8')
-    await rename(tmp, target)
+    await writeJsonBatchInLock({ [name]: data })
     return data
   })
 }
@@ -65,14 +126,10 @@ export function writeJson(name, data) {
  */
 export function updateJson(name, mutator, fallback = null) {
   return withDataLock(async () => {
-    const current = existsSync(dataPath(name)) ? JSON.parse(await readFile(dataPath(name), 'utf8')) : fallback
+    const current = await readJsonOr(name, fallback)
     const next = await mutator(current)
     if (next === undefined) return { skipped: true }
-    await mkdir(dataDir(), { recursive: true })
-    const target = dataPath(name)
-    const tmp = `${target}.tmp`
-    await writeFile(tmp, JSON.stringify(next, null, 2) + '\n', 'utf8')
-    await rename(tmp, target)
+    await writeJsonBatchInLock({ [name]: next })
     return { value: next }
   })
 }

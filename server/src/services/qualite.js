@@ -14,7 +14,7 @@
 // Le rapport existe aussi en texte brut (?format=text), prêt à être relayé tel quel par
 // une notification ou un agent (Syntréso reste la seule source des chiffres).
 
-import { copyFile, mkdir, readFile } from 'node:fs/promises'
+import { writeFile, mkdir, readFile } from 'node:fs/promises'
 import path from 'node:path'
 import { dataPath } from './store.js'
 import { loadState, actualsByMonth, monthOf, addMonths, todayFor } from './projection.js'
@@ -39,7 +39,7 @@ export async function ensureForecastSnapshot() {
       /* absent : on archive */
     }
     await mkdir(archiveDir(), { recursive: true })
-    await copyFile(dataPath('forecast'), target)
+    await writeFile(target, JSON.stringify(state.forecast, null, 2) + '\n', 'utf8')
     return true
   } catch (err) {
     console.warn('[qualite] snapshot forecast impossible :', err.message)

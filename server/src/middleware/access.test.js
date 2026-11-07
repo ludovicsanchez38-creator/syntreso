@@ -1,7 +1,8 @@
 import { test, before } from 'node:test'
 import assert from 'node:assert/strict'
 import { SignJWT, generateKeyPair, exportJWK, createLocalJWKSet } from 'jose'
-import { createAccessMiddleware, sessionValue, COOKIE_NAME } from './access.js'
+import { createHash } from 'node:crypto'
+import { createAccessMiddleware, COOKIE_NAME } from './access.js'
 
 // JWKS local injecté : on teste la vérification (signature/issuer/audience) sans
 // dépendre du réseau ni du vrai team Cloudflare.
@@ -114,9 +115,10 @@ test('access : /api/health reste ouvert (sonde monitoring, aucune donnée)', asy
 
 test('access : cookie de session posé par /connexion accepté, cookie forgé refusé', async () => {
   const m = createAccessMiddleware({ localToken: 'jeton-test' })
-  const ok = await run(m, makeReq({ Cookie: `autre=1; ${COOKIE_NAME}=${sessionValue('jeton-test')}` }))
+  const cookie = await connexion(m)
+  const ok = await run(m, makeReq({ Cookie: `autre=1; ${cookie}` }))
   assert.equal(ok.nexted, true)
-  const ko = await run(m, makeReq({ Cookie: `${COOKIE_NAME}=${sessionValue('autre-jeton')}` }))
+  const ko = await run(m, makeReq({ Cookie: `${COOKIE_NAME}=cookie-forge` }))
   assert.equal(ko.res.statusCode, 401)
 })
 
@@ -125,7 +127,7 @@ test('access : POST /connexion avec le bon jeton -> cookie HttpOnly + redirectio
   const { res } = await run(m, makeReq({}, '/connexion', { method: 'POST', body: { jeton: 'jeton-test' } }))
   assert.equal(res.statusCode, 303)
   assert.match(res.headers['set-cookie'], /HttpOnly/)
-  assert.ok(res.headers['set-cookie'].includes(sessionValue('jeton-test')))
+  assert.match(res.headers['set-cookie'], new RegExp(`^${COOKIE_NAME}=[a-f0-9]{64};`))
   assert.ok(!res.headers['set-cookie'].includes('jeton-test;'), 'le jeton brut ne part jamais dans le cookie')
 })
 
@@ -143,4 +145,47 @@ test('access : page HTML sans session -> redirection vers /connexion ; API sans 
   assert.equal(page.res.location, '/connexion')
   const api = await run(m, makeReq({}, '/api/state', { method: 'GET' }))
   assert.equal(api.res.statusCode, 401)
+})
+
+async function connexion(m) {
+  const { res } = await run(m, makeReq({}, '/connexion', { method: 'POST', body: { jeton: 'jeton-test' } }))
+  assert.equal(res.statusCode, 303)
+  return res.headers['set-cookie'].split(';')[0]
+}
+
+test('F-1 : chaque connexion crée une session aléatoire distincte', async () => {
+  const m = createAccessMiddleware({ localToken: 'jeton-test' })
+  assert.notEqual(await connexion(m), await connexion(m))
+})
+
+test('F-1 : le cookie copié est refusé après déconnexion, les autres sessions restent valides', async () => {
+  const m = createAccessMiddleware({ localToken: 'jeton-test' })
+  const cookie = await connexion(m)
+  const autre = await connexion(m)
+  assert.equal((await run(m, makeReq({ Cookie: cookie }))).nexted, true)
+  await run(m, makeReq({ Cookie: cookie }, '/deconnexion'))
+  assert.equal((await run(m, makeReq({ Cookie: cookie }))).res.statusCode, 401)
+  assert.equal((await run(m, makeReq({ Cookie: autre }))).nexted, true)
+})
+
+test('F-1 : expiration serveur à trente jours même si le cookie est rejoué', async (t) => {
+  t.mock.timers.enable({ apis: ['Date'], now: 1_800_000_000_000 })
+  const m = createAccessMiddleware({ localToken: 'jeton-test' })
+  const cookie = await connexion(m)
+  t.mock.timers.tick(30 * 24 * 3600 * 1000 - 1)
+  assert.equal((await run(m, makeReq({ Cookie: cookie }))).nexted, true)
+  t.mock.timers.tick(1)
+  assert.equal((await run(m, makeReq({ Cookie: cookie }))).res.statusCode, 401)
+})
+
+test('F-1 : une session ne survit pas à la recréation du middleware', async () => {
+  const cookie = await connexion(createAccessMiddleware({ localToken: 'jeton-test' }))
+  const redemarre = createAccessMiddleware({ localToken: 'jeton-test' })
+  assert.equal((await run(redemarre, makeReq({ Cookie: cookie }))).res.statusCode, 401)
+})
+
+test('F-1 : ancien cookie déterministe refusé', async () => {
+  const ancien = createHash('sha256').update('syntreso-session:jeton-test').digest('hex')
+  const m = createAccessMiddleware({ localToken: 'jeton-test' })
+  assert.equal((await run(m, makeReq({ Cookie: `${COOKIE_NAME}=${ancien}` }))).res.statusCode, 401)
 })

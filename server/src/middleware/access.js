@@ -8,7 +8,7 @@
 //   1. Jeton d'accès (SYNTRESO_JETON, généré à l'installation) dans l'en-tête
 //      `Authorization: Bearer <jeton>`. C'est le chemin de l'agent IA et des scripts.
 //   2. Navigateur : la page /connexion demande le jeton une fois et pose un cookie
-//      HttpOnly (valeur dérivée du jeton, jamais le jeton lui-même), valable 30 jours.
+//      HttpOnly (identifiant aléatoire), expirant côté serveur après 30 jours.
 //   3. Option : Cloudflare Access devant le serveur (CF_ACCESS_TEAM_DOMAIN +
 //      CF_ACCESS_AUD). Le JWT `Cf-Access-Jwt-Assertion` est vérifié contre le JWKS de
 //      l'équipe (signature, émetteur, audience).
@@ -17,7 +17,7 @@
 // SYNTRESO_SANS_AUTH=1 est posé explicitement (développement local uniquement).
 
 import { createRemoteJWKSet, jwtVerify } from 'jose'
-import { timingSafeEqual, createHash } from 'node:crypto'
+import { timingSafeEqual, randomBytes } from 'node:crypto'
 
 export const COOKIE_NAME = 'syntreso_session'
 const COOKIE_MAX_AGE_S = 30 * 24 * 3600
@@ -26,11 +26,6 @@ function safeEqual(a, b) {
   const ba = Buffer.from(String(a))
   const bb = Buffer.from(String(b))
   return ba.length === bb.length && timingSafeEqual(ba, bb)
-}
-
-/** Valeur du cookie de session : empreinte du jeton (le jeton ne quitte jamais le serveur). */
-export function sessionValue(token) {
-  return createHash('sha256').update(`syntreso-session:${token}`).digest('hex')
 }
 
 function readCookie(req, name) {
@@ -99,7 +94,8 @@ export function createAccessMiddleware({ teamDomain, aud, localToken, jwks } = {
   }
   const issuer = jwtEnabled ? `https://${teamDomain}` : null
   const keySet = jwks || (jwtEnabled ? createRemoteJWKSet(new URL(`${issuer}/cdn-cgi/access/certs`)) : null)
-  const expectedSession = localToken ? sessionValue(localToken) : null
+  // Sessions propres au processus : un redémarrage les invalide toutes.
+  const sessions = new Map()
 
   const middleware = async (req, res, next) => {
     const method = req.method || 'GET'
@@ -111,8 +107,14 @@ export function createAccessMiddleware({ teamDomain, aud, localToken, jwks } = {
       if (method === 'POST') {
         const proposed = String(req.body?.jeton || '').trim()
         if (proposed && safeEqual(proposed, localToken)) {
+          const now = Date.now()
+          for (const [id, expiresAt] of sessions) {
+            if (expiresAt <= now) sessions.delete(id)
+          }
+          const session = randomBytes(32).toString('hex')
+          sessions.set(session, now + COOKIE_MAX_AGE_S * 1000)
           const secure = isHttps(req) ? '; Secure' : ''
-          res.setHeader('Set-Cookie', `${COOKIE_NAME}=${expectedSession}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_S}${secure}`)
+          res.setHeader('Set-Cookie', `${COOKIE_NAME}=${session}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE_S}${secure}`)
           return res.redirect(303, '/')
         }
         // petit délai : rend l'essai en rafale inutilement lent
@@ -121,6 +123,7 @@ export function createAccessMiddleware({ teamDomain, aud, localToken, jwks } = {
       }
     }
     if (localToken && req.path === '/deconnexion') {
+      sessions.delete(readCookie(req, COOKIE_NAME))
       res.setHeader('Set-Cookie', `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0`)
       return res.redirect(303, '/connexion')
     }
@@ -141,7 +144,10 @@ export function createAccessMiddleware({ teamDomain, aud, localToken, jwks } = {
       const auth = req.get('authorization') || ''
       if (auth.startsWith('Bearer ') && safeEqual(auth.slice(7).trim(), localToken)) return next()
       const cookie = readCookie(req, COOKIE_NAME)
-      if (cookie && safeEqual(cookie, expectedSession)) return next()
+      if (cookie && sessions.has(cookie)) {
+        if (sessions.get(cookie) > Date.now()) return next()
+        sessions.delete(cookie)
+      }
     }
 
     // Navigateur sans session : renvoyer vers la page de connexion plutôt qu'un JSON.

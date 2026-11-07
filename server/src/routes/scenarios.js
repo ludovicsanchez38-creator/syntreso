@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { readJson, writeJson } from '../services/store.js'
+import { readJson, updateJson, withDataSnapshot } from '../services/store.js'
 import { addMonths, monthOf, todayFor } from '../services/dates.js'
 
 const router = Router()
@@ -24,7 +24,7 @@ function resoudreBornes(scenarios, currentMonth) {
 
 router.get('/', async (_req, res, next) => {
   try {
-    const [scenarios, company] = await Promise.all([readJson('scenarios'), readJson('company')])
+    const [scenarios, company] = await withDataSnapshot(() => Promise.all([readJson('scenarios'), readJson('company')]))
     res.json(resoudreBornes(scenarios, monthOf(todayFor(company))))
   } catch (err) {
     next(err)
@@ -33,20 +33,32 @@ router.get('/', async (_req, res, next) => {
 
 router.put('/:id', async (req, res, next) => {
   try {
-    const scenarios = await readJson('scenarios')
-    const sc = scenarios.find((s) => s.id === req.params.id)
-    if (!sc) return res.status(404).json({ error: 'scénario inconnu' })
-
-    const { params, active } = req.body || {}
-    if (params && typeof params === 'object') {
-      for (const [key, value] of Object.entries(params)) {
-        if (!(key in sc.params)) return res.status(400).json({ error: `paramètre inconnu: ${key}` })
-        sc.params[key] = value
+    let sc
+    let error
+    let status
+    await updateJson('scenarios', (scenarios) => {
+      sc = scenarios.find((s) => s.id === req.params.id)
+      if (!sc) {
+        error = 'scénario inconnu'
+        status = 404
+        return undefined
       }
-    }
-    if (typeof active === 'boolean') sc.active = active
+      const { params, active } = req.body || {}
+      if (params && typeof params === 'object') {
+        for (const [key, value] of Object.entries(params)) {
+          if (!(key in sc.params)) {
+            error = `paramètre inconnu: ${key}`
+            status = 400
+            return undefined
+          }
+          sc.params[key] = value
+        }
+      }
+      if (typeof active === 'boolean') sc.active = active
+      return scenarios
+    })
+    if (error) return res.status(status).json({ error })
 
-    await writeJson('scenarios', scenarios)
     const company = await readJson('company')
     res.json(resoudreBornes([sc], monthOf(todayFor(company)))[0])
   } catch (err) {
