@@ -1,0 +1,235 @@
+{
+  "_lisezMoi": "Réglages de Syntréso. Copiez ce fichier en config/reglages.json et adaptez-le. Les clés qui commencent par _ sont des commentaires (ignorées). Une clé absente reprend la valeur par défaut. Documentation complète : docs/REGLAGES.md",
+  "indy": {
+    "_doc": "Lecture des exports Indy (grand livre + balance). Numéros de comptes du plan comptable, comparés par début de numéro (512 couvre 512000, 512100...).",
+    "comptesBancaires": {
+      "_doc": "courant : compte(s) bancaire(s) principal(aux). sousComptes : réserves bancaires (rôle tva, urssaf, perso ou autre), toutes consolidées dans la trésorerie.",
+      "courant": [
+        "512"
+      ],
+      "sousComptes": [],
+      "_exempleSousComptes": [
+        {
+          "compte": "512100",
+          "role": "tva",
+          "libelle": "Réserve TVA"
+        },
+        {
+          "compte": "512200",
+          "role": "urssaf",
+          "libelle": "Réserve cotisations"
+        }
+      ]
+    },
+    "_docOuverture": "auto = solde de début d'exercice lu dans le plus ancien grand livre (0 si les grands livres partent de la création) ; zero ; ou un montant en centimes.",
+    "ouverture": "auto",
+    "libellesIgnores": [
+      "(depot|retrait) sous-compte",
+      "virement interne",
+      "od d'extourne",
+      "od de cloture",
+      "transfert de capital",
+      "affectation (du )?resultat"
+    ],
+    "_docContreparties": "Une ligne bancaire dont la date et le montant correspondent à un débit de ce compte prend cette catégorie, quel que soit son libellé.",
+    "contreparties": [],
+    "_exempleContreparties": [
+      {
+        "compte": "6411",
+        "categorie": "dec_salaires"
+      },
+      {
+        "compte": "644",
+        "categorie": "dec_remuneration"
+      }
+    ],
+    "comptesTva": {
+      "collectee": [
+        "44571"
+      ],
+      "deductible": [
+        "44561",
+        "44562",
+        "44563",
+        "44566"
+      ],
+      "credit": [
+        "44567"
+      ],
+      "aDecaisser": [
+        "44551"
+      ]
+    },
+    "compteCourantAssocie": {
+      "comptes": [
+        "455"
+      ],
+      "fraisSansFluxBancaire": true
+    },
+    "_docRegles": "Ordre = priorité, la première règle qui correspond gagne. motif = expression régulière testée sur le libellé bancaire en minuscules sans accents. sens = entree, sortie ou tous. categorie = identifiant de donnees/categories.json.",
+    "reglesCategories": [
+      {
+        "motif": "apport|augmentation de capital|deblocage (de )?pret|deblocage emprunt",
+        "sens": "entree",
+        "categorie": "enc_apport"
+      },
+      {
+        "motif": "facture|reglement client|virement de|vente|stripe|sumup|paypal",
+        "sens": "entree",
+        "categorie": "enc_prestations"
+      },
+      {
+        "motif": "^\\d{6}-\\d+\\b|^fac?[- ]?\\d",
+        "sens": "entree",
+        "categorie": "enc_prestations"
+      },
+      {
+        "motif": "remuneration|gerance|salaire gerant",
+        "sens": "sortie",
+        "categorie": "dec_remuneration"
+      },
+      {
+        "motif": "remboursement (cca|compte courant|d.associe)",
+        "sens": "sortie",
+        "categorie": "dec_cca_remboursement"
+      },
+      {
+        "motif": "salaire|paie\\b|net a payer",
+        "sens": "sortie",
+        "categorie": "dec_salaires"
+      },
+      {
+        "motif": "urssaf|securite sociale|\\bssi\\b|retraite|prevoyance obligatoire|pole emploi|france travail",
+        "sens": "sortie",
+        "categorie": "dec_urssaf"
+      },
+      {
+        "motif": "dgfip|impots?\\.gouv|\\btva\\b",
+        "sens": "sortie",
+        "categorie": "dec_tva"
+      },
+      {
+        "motif": "\\bcfe\\b|taxe fonciere|impot",
+        "sens": "sortie",
+        "categorie": "dec_impots"
+      },
+      {
+        "motif": "echeance pret|remboursement pret|echeance emprunt|pret (immo|pro)",
+        "sens": "sortie",
+        "categorie": "dec_emprunts"
+      },
+      {
+        "motif": "leasing|credit-bail|location longue duree|\\blld\\b|\\bloa\\b",
+        "sens": "sortie",
+        "categorie": "dec_leasing"
+      },
+      {
+        "motif": "loyer|bail\\b|charges locatives",
+        "sens": "sortie",
+        "categorie": "dec_loyer"
+      },
+      {
+        "motif": "assurance|mutuelle|prevoyance",
+        "sens": "sortie",
+        "categorie": "dec_assurance"
+      },
+      {
+        "motif": "expert.?comptable|comptabilite|avocat|notaire|honoraires",
+        "sens": "sortie",
+        "categorie": "dec_honoraires"
+      },
+      {
+        "motif": "telecom|telephonie|orange|sfr|bouygues|free mobile|\\bfree\\b|sosh|red by",
+        "sens": "sortie",
+        "categorie": "dec_telecom"
+      },
+      {
+        "motif": "publicite|vistaprint|facebook ads|google ads|linkedin",
+        "sens": "sortie",
+        "categorie": "dec_pub"
+      },
+      {
+        "motif": "google|microsoft|adobe|notion|slack|zoom|ovh|o2switch|ionos|abonnement|logiciel|saas",
+        "sens": "sortie",
+        "categorie": "dec_abonnements"
+      },
+      {
+        "motif": "carburant|total ?energies|esso|shell|\\bbp\\b|avia|\\bstation\\b|peage|autoroute|parking|garage",
+        "sens": "sortie",
+        "categorie": "dec_vehicules"
+      },
+      {
+        "motif": "sncf|train|avion|air france|hotel|airbnb|taxi|uber|deplacement|indemnite km",
+        "sens": "sortie",
+        "categorie": "dec_deplacements"
+      },
+      {
+        "motif": "restaurant|resto|brasserie|cafe|boulangerie|traiteur",
+        "sens": "sortie",
+        "categorie": "dec_restaurants"
+      },
+      {
+        "motif": "amazon|fnac|darty|ikea|bureau vallee|leroy merlin|castorama|materiel|fournitures",
+        "sens": "sortie",
+        "categorie": "dec_materiel"
+      },
+      {
+        "motif": "frais bancaires|commission|cotisation carte|services bancaires|agios",
+        "sens": "sortie",
+        "categorie": "dec_banque"
+      },
+      {
+        "motif": "sous-traitance|sous traitance",
+        "sens": "sortie",
+        "categorie": "dec_soustraitance"
+      }
+    ],
+    "categorieParDefaut": {
+      "entree": "enc_divers",
+      "sortie": "dec_divers"
+    }
+  },
+  "previsionnel": {
+    "_doc": "Prévisionnel de base posé par l'import (les saisies et propositions validées sont conservées à chaque import).",
+    "fenetreMedianeMois": 6,
+    "encaissements": {
+      "mode": "mediane",
+      "tauxTvaPct": 20,
+      "categorie": "enc_prestations",
+      "paliersHT": [],
+      "_exemplePaliersHT": [
+        {
+          "depuis": "2027-01",
+          "montantHTCents": 800000,
+          "croissanceMensuellePct": 0
+        }
+      ]
+    },
+    "remunerationGerant": {
+      "categorie": "dec_remuneration",
+      "paliers": [],
+      "_exemplePaliers": [
+        {
+          "depuis": "2027-01",
+          "montantCents": 250000
+        }
+      ]
+    }
+  },
+  "twenty": {
+    "_doc": "Connecteur CRM Twenty (adresse et clé dans .env : TWENTY_URL, TWENTY_KEY). ponderations : probabilité d'encaissement par étape du pipe (clé = valeur stage dans Twenty).",
+    "categorieEncaissement": "enc_prestations",
+    "montantsHT": true,
+    "ponderations": {
+      "NEW": 0.05,
+      "SCREENING": 0.1,
+      "MEETING": 0.4,
+      "PROPOSAL": 0.25,
+      "NEGOCIATION": 0.5,
+      "WON": 0.8,
+      "CUSTOMER": 0,
+      "LOST": 0
+    },
+    "ecartMinimalCents": 50000
+  }
+}

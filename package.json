@@ -1,0 +1,23 @@
+{
+  "name": "syntreso",
+  "version": "1.0.0",
+  "description": "Syntréso - pilotage de trésorerie pour TPE (compta Indy, CRM Twenty, assistant IA optionnel)",
+  "private": true,
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node server/src/index.js",
+    "init": "node scripts/init-base.mjs",
+    "demo": "node scripts/demo.mjs",
+    "import": "node scripts/import-indy.mjs",
+    "test": "npm --prefix server test",
+    "installer:serveur": "npm --prefix server ci --omit=dev",
+    "build:web": "npm --prefix web ci && npm --prefix web run build",
+    "dev": "concurrently -n api,web -c green,blue \"npm --prefix server run dev\" \"npm --prefix web run dev\""
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.3"
+  }
+}

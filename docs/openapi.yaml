@@ -1,0 +1,2894 @@
+# Généré à partir des routes réellement montées (server/src/index.js, server/src/routes/*.js)
+# et de réponses réelles du serveur (données de démonstration et import fictif).
+openapi: 3.1.0
+info:
+  title: API Syntréso
+  version: 1.0.0
+  license:
+    name: Usage privé, non redistribuable
+    identifier: LicenseRef-Prive
+  description: 'API de Syntréso, outil de pilotage de trésorerie d''une TPE (compta Indy, CRM Twenty).
+
+
+    - Tous les montants sont en CENTIMES d''euro, entiers (12 000 EUR = 1200000). Positif = encaissement, négatif
+    = décaissement.
+
+    - Montants de trésorerie en TTC (ce qui passe en banque) ; compte de résultat et point mort en HT.
+
+    - Mois au format AAAA-MM, dates AAAA-MM-JJ. La date du jour du moteur est `company.today` dans GET /api/state.
+
+    - Principe : l''agent lit et simule librement, PROPOSE les écritures ; l''humain valide ; le serveur écrit.
+
+    - Guide d''usage pour un agent : docs/GUIDE-AGENT.md.'
+servers:
+- url: http://127.0.0.1:3900
+  description: Installation locale (Mac) ou serveur via tunnel SSH
+- url: https://{domaine}
+  description: Derrière un reverse proxy HTTPS
+  variables:
+    domaine:
+      default: tresorerie.votre-domaine.fr
+      description: Nom de domaine choisi pour l'appli
+security:
+- jeton: []
+- cookieSession: []
+tags:
+- name: Système
+  description: Santé du serveur et session navigateur.
+- name: Lecture
+  description: 'Situation, projection, échéances, compte de résultat : lecture seule, sans risque.'
+- name: Décision
+  description: 'Simulations et feux verts calculés par le serveur : rien n''est enregistré.'
+- name: Prévisionnel
+  description: Grille du prévisionnel ; la modification directe est réservée à l'humain.
+- name: Propositions
+  description: Écritures en attente de validation humaine.
+- name: Scénarios
+  description: Leviers « et si... » affichés à côté de la trajectoire de base.
+- name: Import Indy
+  description: Dépôt et import des exports comptables Indy (grand livre, balance).
+- name: Intégrations
+  description: 'Twenty (pipe commercial) et recalage des charges : produisent des propositions.'
+- name: Assistant intégré
+  description: Assistant IA embarqué dans l'interface (optionnel, désactivé sans clé).
+paths:
+  /api/health:
+    get:
+      tags:
+      - Système
+      summary: Sonde de santé
+      operationId: sante
+      description: Seule route accessible sans jeton. Ne renvoie aucune donnée.
+      security: []
+      responses:
+        '200':
+          description: Serveur en marche
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+                  service:
+                    type: string
+                    example: syntreso-server
+  /api/state:
+    get:
+      tags:
+      - Lecture
+      summary: Situation complète du jour
+      description: 'Le point d''entrée de l''agent : entreprise, comptes, catégories, factures, indicateurs (kpis
+        : solde brut, net disponible, TVA à reverser, cotisations provisionnées, point bas, autonomie en mois, point
+        mort, résultat prévisionnel, compte courant d''associé), alertes actives, fraîcheur des données et contrôle
+        de réconciliation bancaire. `company.today` est la date du jour retenue par le moteur : toujours la lire
+        plutôt que d''utiliser l''horloge de l''agent.'
+      operationId: lireEtat
+      responses:
+        '200':
+          description: Situation
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Etat'
+        '503':
+          description: Base non initialisée (npm run init ou npm run demo)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/transactions:
+    get:
+      tags:
+      - Lecture
+      summary: Mouvements bancaires réels
+      description: Mouvements importés d'Indy, du plus récent au plus ancien.
+      operationId: listerTransactions
+      parameters:
+      - name: month
+        in: query
+        required: false
+        description: Filtre sur un mois (AAAA-MM).
+        schema:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          example: 2026-11
+      - name: categoryId
+        in: query
+        required: false
+        description: Filtre sur une catégorie.
+        schema:
+          type: string
+      - name: limit
+        in: query
+        required: false
+        description: Nombre maximal de lignes.
+        schema:
+          type: integer
+          minimum: 1
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Transaction'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/forecast:
+    get:
+      tags:
+      - Prévisionnel
+      summary: Grille du prévisionnel
+      description: 'Pour chaque catégorie et chaque mois (12 mois d''historique, 18 mois de projection) : réalisé,
+        prévu, montant retenu par le moteur, note, détail, et si la case est modifiable. `closings` donne le solde
+        de fin de mois.'
+      operationId: lireGrille
+      responses:
+        '200':
+          description: Grille
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrillePrevisionnel'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+    patch:
+      tags:
+      - Prévisionnel
+      summary: Modifier une case du prévisionnel (écriture directe)
+      description: 'Pose le montant prévu d''une catégorie pour un mois (remplace la valeur, ne s''ajoute pas).
+        Réservé au mois courant et aux mois futurs ; refusé sur les catégories calculées par le moteur (TVA, provision
+        URSSAF, IS : passer par une proposition). Encaissement >= 0, décaissement <= 0. Écriture DIRECTE : pour
+        un agent, préférer les propositions validées par l''humain.'
+      operationId: modifierCase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - month
+              - categoryId
+              - amountCents
+              properties:
+                month:
+                  type: string
+                  pattern: ^\d{4}-\d{2}$
+                  example: 2026-11
+                categoryId:
+                  type: string
+                  example: dec_loyer
+                amountCents:
+                  type: integer
+                  description: Centimes, négatif pour un décaissement.
+                  example: -70000
+                note:
+                  type:
+                  - string
+                  - 'null'
+            example:
+              month: 2026-11
+              categoryId: dec_loyer
+              amountCents: -70000
+              note: hausse du loyer
+      responses:
+        '200':
+          description: Grille mise à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GrillePrevisionnel'
+        '400':
+          description: Mois passé, catégorie inconnue ou pilotée, signe incohérent, montant non entier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/projection:
+    get:
+      tags:
+      - Lecture
+      summary: Courbe de trésorerie et projection
+      description: Série quotidienne (réalisé puis projeté), tableau mensuel (ouverture, entrées, sorties, clôture),
+        point bas, solde net disponible, autonomie. Avec `scenarios`, renvoie aussi la trajectoire alternative (bloc
+        `scenario`) sans rien enregistrer.
+      operationId: lireProjection
+      parameters:
+      - name: range
+        in: query
+        required: false
+        description: Fenêtre affichée de la série (les indicateurs restent calculés sur tout l'horizon).
+        schema:
+          type: string
+          enum:
+          - 1M
+          - 3M
+          - 6M
+          - 12M
+      - name: scenarios
+        in: query
+        required: false
+        description: Identifiants de scénarios à appliquer, séparés par des virgules.
+        schema:
+          type: string
+          example: sc_embauche,sc_pret
+      responses:
+        '200':
+          description: Projection
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Projection'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/projection/remuneration-check:
+    post:
+      tags:
+      - Décision
+      summary: Feu vert « puis-je me verser X ? »
+      description: Simule un versement de rémunération (et les cotisations associées si le pilotage TNS est activé),
+        recalcule la trajectoire et rend un verdict vert / ambre / rouge calculé par le serveur. Ne modifie rien.
+      operationId: verifierRemuneration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - montantCents
+              properties:
+                montantCents:
+                  type: integer
+                  minimum: 1
+                  description: Montant en centimes.
+                mois:
+                  type: string
+                  pattern: ^\d{4}-\d{2}$
+                  example: 2026-11
+                  description: 'Mois envisagé (défaut : mois courant).'
+                horizonJours:
+                  type: integer
+                  description: Fenêtre de contrôle du point bas (défaut 60).
+            example:
+              montantCents: 300000
+              mois: 2026-11
+      responses:
+        '200':
+          description: Verdict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerdictRemuneration'
+        '400':
+          description: Montant invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/projection/cca-check:
+    post:
+      tags:
+      - Décision
+      summary: Feu vert « puis-je me rembourser X du compte courant d'associé ? »
+      description: Comme le contrôle de rémunération, sans cotisations (remboursement de dette), plafonné par le
+        compte courant réellement dû. Ne modifie rien.
+      operationId: verifierRemboursementCca
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - montantCents
+              properties:
+                montantCents:
+                  type: integer
+                  minimum: 1
+                  description: Montant en centimes.
+                mois:
+                  type: string
+                  pattern: ^\d{4}-\d{2}$
+                  example: 2026-11
+                  description: 'Mois envisagé (défaut : mois courant).'
+                horizonJours:
+                  type: integer
+            example:
+              montantCents: 50000
+      responses:
+        '200':
+          description: Verdict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/VerdictRemboursementCca'
+        '400':
+          description: Montant invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/projection/impact:
+    post:
+      tags:
+      - Décision
+      summary: Simuler l'impact d'une écriture prévisionnelle
+      description: 'Applique une écriture fictive (mois, catégorie, montant signé) et compare avant / après : point
+        bas, passage sous le seuil, autonomie. Ne modifie rien. À appeler avant toute proposition.'
+      operationId: simulerImpact
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - mois
+              - categoryId
+              - montantCents
+              properties:
+                mois:
+                  type: string
+                  pattern: ^\d{4}-\d{2}$
+                  example: 2026-11
+                categoryId:
+                  type: string
+                montantCents:
+                  type: integer
+                  description: Centimes, positif = encaissement, négatif = décaissement.
+            example:
+              mois: 2026-12
+              categoryId: enc_prestations
+              montantCents: 1200000
+      responses:
+        '200':
+          description: Impact
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImpactEcriture'
+        '400':
+          description: Paramètres invalides ou catégorie inconnue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/projection/dividendes-vs-remuneration:
+    post:
+      tags:
+      - Décision
+      summary: Comparer rémunération et dividendes
+      description: Pour une enveloppe sortie de la société, net en poche par chaque voie (SARL à l'IS, gérant majoritaire
+        TNS). Le net rémunération est AVANT impôt sur le revenu. Taux paramétrés dans company.fiscal. Ne modifie
+        rien.
+      operationId: comparerRemunerationDividendes
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - montantCents
+              properties:
+                montantCents:
+                  type: integer
+                  minimum: 1
+                  description: Montant en centimes.
+                mois:
+                  type: string
+                  pattern: ^\d{4}-\d{2}$
+                  example: 2026-11
+                  description: 'Mois envisagé (défaut : mois courant).'
+            example:
+              montantCents: 1000000
+      responses:
+        '200':
+          description: Comparaison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RemunerationOuDividendes'
+        '400':
+          description: Montant invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/compte-resultat:
+    get:
+      tags:
+      - Lecture
+      summary: Compte de résultat mensuel (HT)
+      description: Produits et charges HT par mois de l'exercice, résultat avant et après IS estimé, ratios. Réalisé
+        pour les mois passés, prévisionnel ensuite.
+      operationId: lireCompteResultat
+      parameters:
+      - name: year
+        in: query
+        required: false
+        description: 'Exercice (défaut : année en cours).'
+        schema:
+          type: string
+          pattern: ^\d{4}$
+      responses:
+        '200':
+          description: Compte de résultat
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompteResultat'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/scenarios:
+    get:
+      tags:
+      - Scénarios
+      summary: Scénarios « et si... »
+      description: Leviers de simulation (embauche, investissement, prêt, retard d'encaissement...) avec leurs paramètres
+        et curseurs.
+      operationId: listerScenarios
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Scenario'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/scenarios/{id}:
+    put:
+      tags:
+      - Scénarios
+      summary: Régler un scénario
+      description: Change les paramètres d'un scénario et/ou l'active pour l'affichage. N'affecte que les simulations,
+        jamais le prévisionnel.
+      operationId: reglerScenario
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+          example: sc_embauche
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                params:
+                  type: object
+                  additionalProperties: true
+                active:
+                  type: boolean
+            example:
+              params:
+                monthlyCostCents: 320000
+              active: true
+      responses:
+        '200':
+          description: Scénario mis à jour
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Scenario'
+        '400':
+          description: Paramètre inconnu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '404':
+          description: Scénario inconnu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/echeances:
+    get:
+      tags:
+      - Lecture
+      summary: Échéancier des sorties datées
+      description: TVA, cotisations, IS, CFE et échéances saisies (donnees/echeances.json), datées au jour près
+        sur l'horizon demandé.
+      operationId: lireEcheancier
+      parameters:
+      - name: jours
+        in: query
+        required: false
+        description: Horizon en jours.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 365
+          default: 90
+      responses:
+        '200':
+          description: Échéancier
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Echeancier'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/proposals:
+    get:
+      tags:
+      - Propositions
+      summary: Propositions (toutes)
+      description: Toutes les propositions, quel que soit leur statut. Filtrer `status == 'pending'` pour celles
+        qui attendent une décision humaine.
+      operationId: listerPropositions
+      responses:
+        '200':
+          description: Liste
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Proposition'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+    post:
+      tags:
+      - Propositions
+      summary: Proposer une écriture (l'agent propose, l'humain valide)
+      description: 'Crée une proposition EN ATTENTE, avec les mêmes contrôles que l''assistant intégré (mois courant
+        ou futur, horizon de 18 mois, catégorie existante, signe cohérent : encaissement > 0, décaissement < 0).
+        Rien n''est écrit au prévisionnel : la proposition apparaît dans l''interface (panneau assistant) où le
+        dirigeant la valide ou la refuse. Sur les catégories calculées par le moteur (TVA, provision URSSAF, IS),
+        le montant est un AJUSTEMENT qui s''ajoute au calcul.'
+      operationId: proposerEcriture
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              oneOf:
+              - type: object
+                title: Écriture prévisionnelle
+                required:
+                - kind
+                - month
+                - categoryId
+                - amountCents
+                - label
+                properties:
+                  kind:
+                    type: string
+                    enum:
+                    - forecast_line
+                  month:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                    example: 2026-11
+                  categoryId:
+                    type: string
+                  amountCents:
+                    type: integer
+                    description: 'Centimes signés : positif = encaissement, négatif = décaissement. S''AJOUTE au
+                      prévu existant du mois.'
+                  label:
+                    type: string
+                    maxLength: 200
+              - type: object
+                title: Recalage d'une charge
+                required:
+                - kind
+                - categoryId
+                - monthlyCents
+                - fromMonth
+                - toMonth
+                - label
+                properties:
+                  kind:
+                    type: string
+                    enum:
+                    - forecast_recalage
+                  categoryId:
+                    type: string
+                    description: Catégorie de sortie.
+                  monthlyCents:
+                    type: integer
+                    maximum: 0
+                    description: Nouveau montant mensuel (négatif, 0 pour supprimer). REMPLACE le prévu sur la plage.
+                  fromMonth:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                    example: 2026-11
+                    description: Premier mois (au plus tôt le mois prochain).
+                  toMonth:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                    example: 2026-11
+                  label:
+                    type: string
+              - type: object
+                title: Relance de facture
+                required:
+                - kind
+                - invoiceId
+                - draft
+                properties:
+                  kind:
+                    type: string
+                    enum:
+                    - invoice_reminder
+                  invoiceId:
+                    type: string
+                  draft:
+                    type: string
+            example:
+              kind: forecast_line
+              month: 2026-12
+              categoryId: enc_prestations
+              amountCents: 1200000
+              label: Devis signé, paiement à 30 jours
+      responses:
+        '201':
+          description: Proposition créée (pending)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposition'
+        '400':
+          description: Proposition refusée (motif dans error)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/proposals/{id}/confirm:
+    post:
+      tags:
+      - Propositions
+      summary: Valider une proposition (décision humaine)
+      description: 'Applique la proposition au prévisionnel. Amendements possibles : `amountCents` et `month` (forecast_line),
+        `monthlyCents` (forecast_recalage). C''est la décision du dirigeant : un agent ne doit l''appeler que sur
+        instruction explicite de l''humain.'
+      operationId: validerProposition
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                amendments:
+                  type: object
+                  properties:
+                    amountCents:
+                      type: integer
+                    month:
+                      type: string
+                      pattern: ^\d{4}-\d{2}$
+                      example: 2026-11
+                    monthlyCents:
+                      type: integer
+            example:
+              amendments:
+                amountCents: 900000
+      responses:
+        '200':
+          description: Proposition validée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposition'
+        '400':
+          description: Amendement invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '404':
+          description: Proposition inconnue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '409':
+          description: Déjà validée ou rejetée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/proposals/{id}/reject:
+    post:
+      tags:
+      - Propositions
+      summary: Rejeter une proposition (décision humaine)
+      description: Marque la proposition comme rejetée (rien n'est écrit au prévisionnel, la décision est gardée
+        en mémoire de l'assistant).
+      operationId: rejeterProposition
+      parameters:
+      - name: id
+        in: path
+        required: true
+        schema:
+          type: string
+      responses:
+        '200':
+          description: Proposition rejetée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Proposition'
+        '404':
+          description: Proposition inconnue
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '409':
+          description: Déjà validée ou rejetée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/audit:
+    get:
+      tags:
+      - Lecture
+      summary: Journal des modifications
+      description: 'Dernières lignes du journal (qui a modifié quoi : utilisateur, agent, import), les plus récentes
+        en dernier.'
+      operationId: lireJournal
+      parameters:
+      - name: limit
+        in: query
+        required: false
+        description: Nombre de lignes.
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 100
+      responses:
+        '200':
+          description: Journal
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/JournalAudit'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/qualite-previsions:
+    get:
+      tags:
+      - Lecture
+      summary: Prévu ou réalisé d'un mois clos
+      description: Compare le prévisionnel archivé au début du mois au réalisé, par catégorie. `format=text` renvoie
+        un bloc texte prêt à relayer.
+      operationId: lireQualitePrevisions
+      parameters:
+      - name: month
+        in: query
+        required: false
+        description: 'Mois clos (défaut : mois précédent).'
+        schema:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+          example: 2026-11
+      - name: format
+        in: query
+        required: false
+        description: text pour un bloc texte.
+        schema:
+          type: string
+          enum:
+          - text
+      responses:
+        '200':
+          description: Comparaison
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QualitePrevisions'
+            text/plain:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/export/dossier:
+    get:
+      tags:
+      - Lecture
+      summary: Dossier banquier imprimable
+      description: Page HTML autonome (situation, courbe, résultat, hypothèses) à imprimer en PDF depuis le navigateur.
+      operationId: exporterDossier
+      responses:
+        '200':
+          description: Page HTML
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/integrations/recalage-charges:
+    post:
+      tags:
+      - Intégrations
+      summary: Proposer le recalage des charges sur le réalisé
+      description: 'Compare le prévu de chaque charge à la médiane des 6 derniers mois clos et crée des propositions
+        `forecast_recalage` au-delà de 30 % ET 50 EUR/mois d''écart. `?dry=1` (ou dryRun) : diagnostic seul.'
+      operationId: recalerCharges
+      parameters:
+      - name: dry
+        in: query
+        required: false
+        description: Diagnostic sans création.
+        schema:
+          type: string
+          enum:
+          - '1'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun:
+                  type: boolean
+      responses:
+        '200':
+          description: Rapport
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RapportRecalage'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/integrations/twenty/sync:
+    post:
+      tags:
+      - Intégrations
+      summary: Synchroniser le pipe commercial Twenty
+      description: 'Lit les opportunités Twenty (TWENTY_URL, TWENTY_KEY), calcule le pipe pondéré par mois (pondérations
+        de config/reglages.json), et crée des propositions `forecast_line` pour les hausses par rapport au prévisionnel.
+        Les baisses sont seulement signalées (`decreases`). Idempotent. `?dry=1` : diagnostic seul.'
+      operationId: synchroniserTwenty
+      parameters:
+      - name: dry
+        in: query
+        required: false
+        description: Diagnostic sans création.
+        schema:
+          type: string
+          enum:
+          - '1'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                dryRun:
+                  type: boolean
+      responses:
+        '200':
+          description: Rapport
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RapportTwenty'
+        '422':
+          description: Catégorie cible absente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '502':
+          description: Twenty injoignable ou clé refusée
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '503':
+          description: Connecteur non configuré
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/import/indy:
+    get:
+      tags:
+      - Import Indy
+      summary: Aperçu du dossier d'entrée Indy
+      description: Liste les exports reconnus dans le dossier d'entrée (un grand livre par exercice, la balance
+        la plus récente) et ceux qui seront ignorés. Ne lit ni n'écrit aucune donnée.
+      operationId: apercuImportIndy
+      responses:
+        '200':
+          description: Aperçu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApercuImport'
+        '422':
+          description: Dossier d'entrée introuvable
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+    post:
+      tags:
+      - Import Indy
+      summary: Importer les exports Indy
+      description: 'Relit les grands livres et la balance du dossier d''entrée, reconstruit les mouvements bancaires,
+        la dette de TVA, le compte courant d''associé et le prévisionnel de base (les saisies et propositions validées
+        sont conservées). `simulation: true` renvoie le rapport sans rien écrire : à faire d''abord. Vérifier ensuite
+        `reconciliation.statut == ''ok''`.'
+      operationId: importerIndy
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                simulation:
+                  type: boolean
+                  default: false
+                reinitialiserPrevisionnel:
+                  type: boolean
+                  default: false
+                  description: 'true : repart d''un prévisionnel neuf (les saisies manuelles sont perdues).'
+            example:
+              simulation: true
+      responses:
+        '200':
+          description: Rapport d'import
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RapportImport'
+        '422':
+          description: Exports manquants ou illisibles, base non initialisée, catégorie inconnue dans les réglages
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/import/indy/fichiers/{nom}:
+    put:
+      tags:
+      - Import Indy
+      summary: Déposer un export Indy dans le dossier d'entrée
+      description: 'Corps = contenu CSV brut (en-tête Content-Type: text/csv). Le serveur vérifie qu''il s''agit
+        d''un grand livre ou d''une balance Indy. Un fichier de même nom est remplacé.'
+      operationId: deposerExportIndy
+      parameters:
+      - name: nom
+        in: path
+        required: true
+        schema:
+          type: string
+          pattern: ^[\w .()-]{1,120}\.csv$
+          example: grand-livre-2026.csv
+      requestBody:
+        required: true
+        content:
+          text/csv:
+            schema:
+              type: string
+      responses:
+        '201':
+          description: Fichier déposé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DepotFichier'
+        '400':
+          description: Nom de fichier invalide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '422':
+          description: Contenu non reconnu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/agent/status:
+    get:
+      tags:
+      - Assistant intégré
+      summary: L'assistant IA intégré est-il actif ?
+      description: Indique si l'assistant intégré est utilisable (clé présente, SYNTRESO_ASSISTANT) et pourquoi.
+      operationId: statutAssistant
+      responses:
+        '200':
+          description: Statut
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StatutAssistant'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/agent/digest:
+    post:
+      tags:
+      - Assistant intégré
+      summary: Régénérer le résumé lu par l'assistant
+      description: Recalcule donnees/assistant/DONNEES.md à partir des données actuelles (fait automatiquement après
+        chaque modification).
+      operationId: regenererDigest
+      responses:
+        '200':
+          description: Fait
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok:
+                    type: boolean
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/agent/ask:
+    post:
+      tags:
+      - Assistant intégré
+      summary: Poser une question à l'assistant intégré (flux)
+      description: 'Réponse en flux Server-Sent Events : lignes `data: {json}` avec type chunk (texte), proposal
+        (proposition créée), proposal_error, done ou error. Une seule question à la fois (429 sinon). Utile pour
+        l''interface ; un agent externe a plutôt intérêt à appeler directement les routes de lecture et de décision.'
+      operationId: questionAssistant
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+              - question
+              properties:
+                question:
+                  type: string
+                  maxLength: 2000
+                newConversation:
+                  type: boolean
+      responses:
+        '200':
+          description: Flux SSE
+          content:
+            text/event-stream:
+              schema:
+                type: string
+        '400':
+          description: Question vide
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '429':
+          description: Une réponse est déjà en cours
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '503':
+          description: Assistant désactivé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/agent/proactive:
+    get:
+      tags:
+      - Assistant intégré
+      summary: Alerte du jour rédigée par l'assistant
+      description: Texte mis en cache ; `refresh=1` le régénère (appel au modèle).
+      operationId: alerteDuJour
+      parameters:
+      - name: refresh
+        in: query
+        required: false
+        description: Régénérer.
+        schema:
+          type: string
+          enum:
+          - '1'
+      responses:
+        '200':
+          description: Contenu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContenuIA'
+        '503':
+          description: Assistant désactivé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/agent/comment:
+    get:
+      tags:
+      - Assistant intégré
+      summary: Commentaire de trésorerie du mois
+      description: Texte mis en cache ; `refresh=1` le régénère.
+      operationId: commentaireDuMois
+      parameters:
+      - name: refresh
+        in: query
+        required: false
+        description: Régénérer.
+        schema:
+          type: string
+          enum:
+          - '1'
+      responses:
+        '200':
+          description: Contenu
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ContenuIA'
+        '503':
+          description: Assistant désactivé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /api/agent/revue-mensuelle:
+    get:
+      tags:
+      - Assistant intégré
+      summary: Revue mensuelle (commentaire + contre-lecture)
+      description: Commentaire du mois et sa critique par un second passage du modèle. `refresh=1` régénère les
+        deux (1 à 3 minutes).
+      operationId: revueMensuelle
+      parameters:
+      - name: refresh
+        in: query
+        required: false
+        description: Régénérer.
+        schema:
+          type: string
+          enum:
+          - '1'
+      responses:
+        '200':
+          description: Revue
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  comment:
+                    $ref: '#/components/schemas/ContenuIA'
+                  challenge:
+                    type: object
+                    properties:
+                      text:
+                        type: string
+                      generatedAt:
+                        type: string
+                        format: date-time
+                      forGeneratedAt:
+                        type: string
+                        format: date-time
+        '503':
+          description: Assistant désactivé
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Erreur'
+        '401':
+          $ref: '#/components/responses/NonAutorise'
+  /connexion:
+    get:
+      tags:
+      - Système
+      summary: Page de connexion (navigateur)
+      operationId: pageConnexion
+      security: []
+      description: Formulaire HTML demandant le jeton d'accès. Un navigateur sans session est redirigé ici.
+      responses:
+        '200':
+          description: Page HTML
+          content:
+            text/html:
+              schema:
+                type: string
+    post:
+      tags:
+      - Système
+      summary: Ouvrir une session navigateur
+      operationId: connexion
+      security: []
+      description: Vérifie le jeton et pose le cookie de session `syntreso_session` (HttpOnly, 30 jours), puis redirige
+        vers /.
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required:
+              - jeton
+              properties:
+                jeton:
+                  type: string
+      responses:
+        '303':
+          description: Session ouverte, redirection vers /
+        '401':
+          description: Jeton incorrect (page HTML avec message)
+          content:
+            text/html:
+              schema:
+                type: string
+  /deconnexion:
+    get:
+      tags:
+      - Système
+      summary: Fermer la session navigateur
+      operationId: deconnexion
+      security: []
+      description: Efface le cookie de session et redirige vers /connexion.
+      responses:
+        '303':
+          description: Redirection vers /connexion
+components:
+  securitySchemes:
+    jeton:
+      type: http
+      scheme: bearer
+      description: 'Jeton d''accès SYNTRESO_JETON du fichier .env : en-tête `Authorization: Bearer <jeton>`.'
+    cookieSession:
+      type: apiKey
+      in: cookie
+      name: syntreso_session
+      description: Cookie posé par la page /connexion (navigateur). Équivalent au jeton.
+  responses:
+    NonAutorise:
+      description: Jeton absent ou invalide
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Erreur'
+  schemas:
+    Erreur:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Message lisible en français.
+      required:
+      - error
+    Etat:
+      type: object
+      properties:
+        company:
+          type: object
+          properties:
+            name:
+              type: string
+            sector:
+              type: string
+            location:
+              type: string
+            employees:
+              type: integer
+            demoToday:
+              type: string
+              format: date
+            lowCashThresholdCents:
+              type: integer
+              description: Montant en centimes d'euro (entier).
+            capitalSocialCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            importedAt:
+              type: object
+              additionalProperties:
+                type: string
+                format: date
+            fiscal:
+              type: object
+              properties:
+                tvaRegime:
+                  type: string
+                vatRatePct:
+                  type: integer
+                amountsAreTTC:
+                  type: boolean
+                tva:
+                  type: object
+                  properties:
+                    autoCompute:
+                      type: boolean
+                    payDayOfMonth:
+                      type: integer
+                    categoryId:
+                      type: string
+                tns:
+                  type: object
+                  properties:
+                    autoCompute:
+                      type: boolean
+                    remunerationCategoryId:
+                      type: string
+                    provisionCategoryId:
+                      type: string
+                    cotisationTauxPct:
+                      type: integer
+                    cotisationTauxApresAcrePct:
+                      type: integer
+                    acre:
+                      type: object
+                      properties:
+                        actif:
+                          type: boolean
+                        tauxPct:
+                          type: integer
+                        finMois:
+                          type: string
+                          pattern: ^\d{4}-\d{2}$
+                    passAnnuelCents:
+                      type: integer
+                      description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                    assietteAbattementPct:
+                      type: integer
+                    dividendesTauxPct:
+                      type: integer
+                    indemniteJournaliereCents:
+                      type: integer
+                      description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                is:
+                  type: object
+                  properties:
+                    seuilReduitCents:
+                      type: integer
+                      description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                    tauxReduitPct:
+                      type: integer
+                    tauxNormalPct:
+                      type: integer
+                    autoDecaissement:
+                      type: boolean
+                    categoryId:
+                      type: string
+                    payMonth:
+                      type: string
+                flatTaxPct:
+                  type: number
+                vatDueActualCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                _vatDueActualSource:
+                  type: string
+            seasonality:
+              type: object
+              properties:
+                enabled:
+                  type: boolean
+                monthly:
+                  type: array
+                  items:
+                    type: integer
+            businessAssumptions:
+              type: array
+              items:
+                type: string
+            today:
+              type: string
+              format: date
+            dataAsOf:
+              type: string
+              format: date
+            provisionsHeld:
+              type: object
+              properties:
+                tvaCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                urssafCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                persoCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                _source:
+                  type: string
+            ccaActual:
+              type: object
+              properties:
+                cents:
+                  type: integer
+                asOf:
+                  type: string
+                  format: date
+                _source:
+                  type: string
+            fraisCCA:
+              type: object
+              properties:
+                reelParMoisCents:
+                  type: object
+                  additionalProperties:
+                    type: integer
+          additionalProperties: true
+          description: Contenu de donnees/company.json (identité, seuil, réglages fiscaux) plus `today`, la date
+            du jour retenue par le moteur. Champs libres selon l'entreprise.
+        accounts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              openingBalanceCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              openingDate:
+                type: string
+                format: date
+              expectedBalanceCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              expectedBalanceDate:
+                type: string
+                format: date
+              currentAccountCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              _expectedBalanceSource:
+                type: string
+        categories:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              direction:
+                type: string
+              order:
+                type: integer
+              vatRatePct:
+                type: integer
+              fixed:
+                type: boolean
+              excludeFromResultat:
+                type: boolean
+              amortissementMois:
+                type: integer
+        invoices:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              clientName:
+                type: string
+              label:
+                type: string
+              amountCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              issueDate:
+                type: string
+                format: date
+              dueDate:
+                type: string
+                format: date
+              status:
+                type: string
+              expectedPaymentDate:
+                type:
+                - string
+                - 'null'
+        kpis:
+          type: object
+          properties:
+            balanceTodayCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            deltaVs30dCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            in30dCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            out30dCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            lowPoint:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                cents:
+                  type: integer
+            lowPoint90:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                cents:
+                  type: integer
+            yearEndProjected:
+              type: object
+              properties:
+                month:
+                  type: string
+                  pattern: ^\d{4}-\d{2}$
+                cents:
+                  type: integer
+            currentAccountCents:
+              type:
+              - integer
+              - 'null'
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            lowCashThresholdCents:
+              type: integer
+              description: Montant en centimes d'euro (entier).
+            netAvailableCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            committedCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            vatDueCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            socialProvisionCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            provisionsHeldCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            persoReserveCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            resteAProvisionnerCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            runwayMonths:
+              type: number
+              description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+            runwayWorstCaseMonths:
+              type: number
+              description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+            monthlyBurnNetCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            breakEvenHTCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            breakEvenLookbackMonths:
+              type: integer
+            resultatPrevisionnel:
+              type: object
+              properties:
+                exerciseYear:
+                  type: string
+                productsHTCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                chargesHTCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                resultatAvantISCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                isProvisionCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                resultatApresISCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            cca:
+              type:
+              - object
+              - 'null'
+              properties:
+                sinceMonth:
+                  type:
+                  - string
+                  - number
+                  - object
+                  - 'null'
+                  description: Valeur absente (null) dans les exemples observés.
+                untilMonth:
+                  type:
+                  - string
+                  - number
+                  - object
+                  - 'null'
+                  description: Valeur absente (null) dans les exemples observés.
+                accruedCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                projectedEndCents:
+                  type: integer
+                  description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                source:
+                  type: string
+                asOfDate:
+                  type: string
+                  format: date
+            suggestedThresholdCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            soldeBrutCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            tvaAReverserCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            tvaDueDate:
+              type:
+              - string
+              - number
+              - object
+              - 'null'
+              description: Valeur absente (null) dans les exemples observés.
+            cotisationsProvisionneesCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            soldeNetDisponibleCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            committedWindowMonths:
+              type: integer
+        alerts:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              kind:
+                type: string
+              severity:
+                type: string
+              title:
+                type: string
+              detail:
+                type: string
+              amountCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              committedCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              invoiceId:
+                type: string
+              daysLate:
+                type: integer
+              categoryId:
+                type: string
+              medianCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              month:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+        dataFreshness:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              daysOld:
+                type: integer
+              level:
+                type: string
+        reconciliation:
+          type: object
+          properties:
+            status:
+              type: string
+            expectedCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            reconstructedCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            deltaCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            date:
+              type: string
+              format: date
+            toleranceCents:
+              type: integer
+              description: Montant en centimes d'euro (entier).
+            perAccount:
+              type: array
+              items:
+                type: object
+                properties:
+                  accountId:
+                    type: string
+                  label:
+                    type: string
+                  date:
+                    type: string
+                    format: date
+                  expectedCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  reconstructedCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  deltaCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  status:
+                    type: string
+    Transaction:
+      type: object
+      properties:
+        id:
+          type: string
+        date:
+          type: string
+          format: date
+        label:
+          type: string
+        categoryId:
+          type: string
+        amountCents:
+          type: integer
+          description: Montant en centimes d'euro (entier, TTC tel que vu en banque). Positif = encaissement, négatif
+            = décaissement.
+        accountId:
+          type: string
+        counterparty:
+          type:
+          - string
+          - 'null'
+        invoiceId:
+          type:
+          - string
+          - number
+          - object
+          - 'null'
+          description: Valeur absente (null) dans les exemples observés.
+        source:
+          type: string
+    GrillePrevisionnel:
+      type: object
+      properties:
+        months:
+          type: array
+          items:
+            type: string
+            pattern: ^\d{4}-\d{2}$
+        currentMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        rows:
+          type: array
+          items:
+            type: object
+            properties:
+              categoryId:
+                type: string
+              label:
+                type: string
+              direction:
+                type: string
+              cells:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    month:
+                      type: string
+                      pattern: ^\d{4}-\d{2}$
+                    actualCents:
+                      type:
+                      - integer
+                      - 'null'
+                      description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                    forecastCents:
+                      type:
+                      - integer
+                      - 'null'
+                      description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                    retainedCents:
+                      type: integer
+                      description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                    note:
+                      type:
+                      - string
+                      - 'null'
+                    details:
+                      type:
+                      - string
+                      - number
+                      - object
+                      - 'null'
+                      description: Valeur absente (null) dans les exemples observés.
+                    actualDetails:
+                      type:
+                      - array
+                      - 'null'
+                      items:
+                        type: object
+                        properties:
+                          date:
+                            type: string
+                            format: date
+                          label:
+                            type: string
+                          amountCents:
+                            type: integer
+                            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                    editable:
+                      type: boolean
+        closings:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+              closingCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              projected:
+                type: boolean
+    Projection:
+      type: object
+      properties:
+        today:
+          type: string
+          format: date
+        balanceTodayCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        netAvailableCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        committedCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        vatDueCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        socialProvisionCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        provisionsHeldCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        persoReserveCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        resteAProvisionnerCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        runwayMonths:
+          type: number
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        runwayWorstCaseMonths:
+          type: number
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        monthlyBurnNetCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        series:
+          type: array
+          items:
+            type: object
+            properties:
+              date:
+                type: string
+                format: date
+              actualCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              projectedCents:
+                type:
+                - string
+                - number
+                - object
+                - 'null'
+                description: Valeur absente (null) dans les exemples observés.
+        monthly:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+              openingCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              inCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              outCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              closingCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              projected:
+                type: boolean
+        lowPoint:
+          type: object
+          properties:
+            date:
+              type: string
+              format: date
+            cents:
+              type: integer
+        lowPoint90:
+          type: object
+          properties:
+            date:
+              type: string
+              format: date
+            cents:
+              type: integer
+        yearEndProjected:
+          type: object
+          properties:
+            month:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+            cents:
+              type: integer
+        scenario:
+          type:
+          - object
+          - 'null'
+          properties:
+            ids:
+              type: array
+              items:
+                type: string
+            series:
+              type: array
+              items:
+                type: object
+                properties:
+                  date:
+                    type: string
+                    format: date
+                  actualCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  projectedCents:
+                    type:
+                    - string
+                    - number
+                    - object
+                    - 'null'
+                    description: Valeur absente (null) dans les exemples observés.
+            monthly:
+              type: array
+              items:
+                type: object
+                properties:
+                  month:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                  openingCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  inCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  outCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  closingCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  projected:
+                    type: boolean
+            lowPoint:
+              type: object
+              properties:
+                date:
+                  type: string
+                  format: date
+                cents:
+                  type: integer
+            netAvailableCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            runwayMonths:
+              type: number
+              description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+            runwayWorstCaseMonths:
+              type: number
+              description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+    CompteResultat:
+      type: object
+      properties:
+        exerciseYear:
+          type: string
+        months:
+          type: array
+          items:
+            type: string
+            pattern: ^\d{4}-\d{2}$
+        currentMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        produits:
+          type: array
+          items:
+            type: object
+            properties:
+              categoryId:
+                type: string
+              label:
+                type: string
+              direction:
+                type: string
+              parMois:
+                type: object
+                additionalProperties:
+                  type: integer
+              totalCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        charges:
+          type: array
+          items:
+            type: object
+            properties:
+              categoryId:
+                type: string
+              label:
+                type: string
+              direction:
+                type: string
+              parMois:
+                type: object
+                additionalProperties:
+                  type: integer
+              totalCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        parMois:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              produitsHTCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              chargesHTCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              resultatAvantISCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              realized:
+                type: boolean
+        totalProduitsHTCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        totalChargesHTCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        resultatAvantISCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        isProvisionCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        resultatApresISCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        isBracket:
+          type: string
+        ratios:
+          type: object
+          properties:
+            tauxMargeNettePct:
+              type: number
+            tauxResultatAvantISPct:
+              type: number
+        breakEvenHTCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        availableYears:
+          type: array
+          items:
+            type: string
+        currentYear:
+          type: string
+    Scenario:
+      type: object
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+        description:
+          type: string
+        active:
+          type: boolean
+        params:
+          type: object
+          additionalProperties:
+            type:
+            - integer
+            - string
+        sliders:
+          type: array
+          items:
+            type: object
+            properties:
+              key:
+                type: string
+              label:
+                type: string
+              type:
+                type: string
+              min:
+                type:
+                - integer
+                - string
+              max:
+                type:
+                - integer
+                - string
+              step:
+                type: integer
+              options:
+                type: array
+                items:
+                  type: string
+    Echeancier:
+      type: object
+      properties:
+        fromDate:
+          type: string
+          format: date
+        toDate:
+          type: string
+          format: date
+        horizonDays:
+          type: integer
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              categoryId:
+                type: string
+              dueDate:
+                type: string
+                format: date
+              amountCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              kind:
+                type: string
+              recurrence:
+                type: string
+              source:
+                type: string
+              note:
+                type: string
+        totalOutCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        byMonth:
+          type: object
+          additionalProperties:
+            type: object
+            properties:
+              outCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              inCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              count:
+                type: integer
+    StatutAssistant:
+      type: object
+      properties:
+        available:
+          type: boolean
+        raison:
+          type: string
+    Proposition:
+      type: object
+      properties:
+        id:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        status:
+          type: string
+          enum:
+          - pending
+          - confirmed
+          - rejected
+        source:
+          type: string
+        kind:
+          type: string
+          enum:
+          - forecast_line
+          - forecast_recalage
+          - invoice_reminder
+        payload:
+          type: object
+          properties:
+            kind:
+              type: string
+            categoryId:
+              type: string
+            monthlyCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            fromMonth:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+            toMonth:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+            label:
+              type: string
+            month:
+              type: string
+              pattern: ^\d{4}-\d{2}$
+            amountCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        context:
+          type: object
+          properties:
+            plannedMonthlyCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            targetMonthlyCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            medianCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            presence:
+              type: string
+            currentCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            targetCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            deltaCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        resolvedAt:
+          type: string
+          format: date-time
+      description: 'Écriture proposée (par un agent via POST /api/proposals, l''assistant IA intégré, la synchronisation
+        Twenty ou le recalage des charges), en attente de validation humaine. `payload` dépend de `kind` : forecast_line
+        { month, categoryId, amountCents, label } ; forecast_recalage { categoryId, monthlyCents, fromMonth, toMonth,
+        label } ; invoice_reminder { invoiceId, draft }.'
+    JournalAudit:
+      type: object
+      properties:
+        entries:
+          type: array
+          items:
+            type: object
+            properties:
+              ts:
+                type: string
+                format: date-time
+              actor:
+                type: string
+              action:
+                type: string
+              target:
+                type: string
+              before:
+                type:
+                - object
+                - 'null'
+                properties:
+                  amountCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              after:
+                type:
+                - object
+                - 'null'
+                properties:
+                  amountCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              meta:
+                type: object
+                properties:
+                  month:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                  categoryId:
+                    type: string
+                  proposalId:
+                    type: string
+                  monthlyCents:
+                    type: integer
+                    description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+                  fromMonth:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                  toMonth:
+                    type: string
+                    pattern: ^\d{4}-\d{2}$
+                  kind:
+                    type: string
+        count:
+          type: integer
+    QualitePrevisions:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        hasArchive:
+          type: boolean
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              categoryId:
+                type: string
+              label:
+                type: string
+              direction:
+                type: string
+              plannedCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              actualCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              gapCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+    VerdictRemuneration:
+      type: object
+      properties:
+        verdict:
+          type: string
+          enum:
+          - vert
+          - ambre
+          - rouge
+        requestedCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        horizonDays:
+          type: integer
+        couplingCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        couplingRatePct:
+          type: integer
+        totalCostCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        netBeforeCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        netAfterCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        thresholdCents:
+          type: integer
+          description: Montant en centimes d'euro (entier).
+        lowPointNextCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        lowPointNextDate:
+          type: string
+          format: date
+        runwayBeforeMonths:
+          type: number
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        runwayAfterMonths:
+          type: number
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        criteria:
+          type: object
+          properties:
+            netOk:
+              type: boolean
+            lowOk:
+              type: boolean
+            runwayOk:
+              type: boolean
+    VerdictRemboursementCca:
+      oneOf:
+      - type: object
+        properties:
+          verdict:
+            type: string
+            enum:
+            - vert
+            - ambre
+            - rouge
+          requestedCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          month:
+            type: string
+            pattern: ^\d{4}-\d{2}$
+          horizonDays:
+            type: integer
+          couplingCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          totalCostCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          ccaAccruedCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          ccaProjectedEndCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          exceedsCap:
+            type: boolean
+          netBeforeCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          netAfterCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          thresholdCents:
+            type: integer
+            description: Montant en centimes d'euro (entier).
+          lowPointNextCents:
+            type: integer
+            description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+          lowPointNextDate:
+            type: string
+            format: date
+          runwayBeforeMonths:
+            type: number
+            description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+          runwayAfterMonths:
+            type: number
+            description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+          criteria:
+            type: object
+            properties:
+              netOk:
+                type: boolean
+              lowOk:
+                type: boolean
+              runwayOk:
+                type: boolean
+              capOk:
+                type: boolean
+      - type: object
+        properties:
+          verdict:
+            type: string
+            enum:
+            - indisponible
+          reason:
+            type: string
+      description: 'Verdict complet si le compte courant d''associé est connu (import Indy ou fenêtre CCA paramétrée),
+        sinon { verdict: ''indisponible'', reason }.'
+    ImpactEcriture:
+      type: object
+      properties:
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        categoryId:
+          type: string
+        amountCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        thresholdCents:
+          type: integer
+          description: Montant en centimes d'euro (entier).
+        runwayBeforeMonths:
+          type: number
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        runwayAfterMonths:
+          type: number
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        runwayDeltaMonths:
+          type: integer
+          description: Nombre de mois (décimal, une décimale) ou null si non calculable.
+        lowPointBeforeCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        lowPointAfterCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        lowPointAfterDate:
+          type: string
+          format: date
+        crossesThreshold:
+          type: boolean
+    RemunerationOuDividendes:
+      type: object
+      properties:
+        grossCostCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        month:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        capitalSocialCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        seuil10Cents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        remuneration:
+          type: object
+          properties:
+            brutCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            cotisationsCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            cotisationRatePct:
+              type: integer
+            isCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            netAvantIRCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            irModelise:
+              type: boolean
+        dividendes:
+          type: object
+          properties:
+            isRatePct:
+              type: integer
+            isCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            dividendeBrutCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            fractionSousSeuilCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            fractionSurSeuilCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            prelevementsSociauxCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            prelevementsSociauxPct:
+              type: number
+            cotisationsTnsCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            cotisationsTnsPct:
+              type: integer
+            irCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            irPct:
+              type: number
+            netCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            irModelise:
+              type: boolean
+        deltaNetDividendesMoinsRemAvantIRCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        beneficeAvantISCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        exerciseYear:
+          type: string
+        avertissements:
+          type: array
+          items:
+            type: string
+    RapportRecalage:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        dryRun:
+          type: boolean
+        currentMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        fromMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        toMonth:
+          type: string
+          pattern: ^\d{4}-\d{2}$
+        items:
+          type: array
+          items:
+            type: object
+            properties:
+              categoryId:
+                type: string
+              label:
+                type: string
+              plannedMonthlyCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              targetMonthlyCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              gapMonthlyCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              medianCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              presence:
+                type: string
+              fromMonth:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+              toMonth:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+        created:
+          type: integer
+    RapportTwenty:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        dryRun:
+          type: boolean
+        oppCount:
+          type: integer
+        weightedTotalCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        deltas:
+          type: array
+          items:
+            type: object
+            properties:
+              month:
+                type: string
+                pattern: ^\d{4}-\d{2}$
+              categoryId:
+                type: string
+              deltaCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              currentCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+              targetCents:
+                type: integer
+                description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        decreases:
+          type: array
+        proposalsCreated:
+          type: integer
+        proposalsSkipped:
+          type: integer
+    ApercuImport:
+      type: object
+      properties:
+        dossier:
+          type: string
+        grandsLivres:
+          type: array
+          items:
+            type: object
+            properties:
+              nom:
+                type: string
+              du:
+                type: string
+                format: date
+              au:
+                type: string
+                format: date
+        balance:
+          type: string
+        ignores:
+          type: array
+    RapportImport:
+      type: object
+      properties:
+        grandsLivres:
+          type: array
+          items:
+            type: object
+            properties:
+              nom:
+                type: string
+              du:
+                type: string
+                format: date
+              au:
+                type: string
+                format: date
+        balance:
+          type: string
+        transactions:
+          type: integer
+        periode:
+          type: object
+          properties:
+            du:
+              type: string
+              format: date
+            au:
+              type: string
+              format: date
+        comptesBancaires:
+          type: array
+          items:
+            type: string
+        ouvertureCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        soldeCourantCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        soldeConsolideCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        soldeReconstruitCents:
+          type: integer
+          description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+        reconciliation:
+          type: object
+          properties:
+            deltaCents:
+              type: integer
+              description: Montant en centimes d'euro (entier). Négatif = sortie d'argent.
+            statut:
+              type: string
+        classeesParDefaut:
+          type: integer
+        parCategorie:
+          type: object
+          additionalProperties:
+            type: integer
+        lignesPrevisionnel:
+          type: integer
+        dateDesDonnees:
+          type: string
+          format: date
+        fichiersIgnores:
+          type: array
+        simulation:
+          type: boolean
+    DepotFichier:
+      type: object
+      properties:
+        ok:
+          type: boolean
+        nom:
+          type: string
+        nature:
+          type: string
+          enum:
+          - grand-livre
+          - balance
+        octets:
+          type: integer
+    ContenuIA:
+      type: object
+      properties:
+        text:
+          type: string
+          description: Texte markdown généré.
+        generatedAt:
+          type: string
+          format: date-time
+        cached:
+          type: boolean

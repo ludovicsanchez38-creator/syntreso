@@ -1,0 +1,4 @@
+Déposez ici les exports Indy (Documents > Comptabilité, bouton de téléchargement, format « Excel ») :
+- le grand livre de chaque année depuis la création de l'entreprise (au minimum l'année en cours) ;
+- la balance la plus récente.
+Puis lancez l'import (npm run import, ou le bouton de l'API). Un nouveau dépôt pour la même année remplace l'ancien.

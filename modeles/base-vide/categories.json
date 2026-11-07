@@ -1,0 +1,208 @@
+[
+  {
+    "id": "enc_prestations",
+    "label": "Ventes et prestations",
+    "direction": "in",
+    "order": 1,
+    "vatRatePct": 20
+  },
+  {
+    "id": "enc_divers",
+    "label": "Autres encaissements",
+    "direction": "in",
+    "order": 2,
+    "vatRatePct": 0
+  },
+  {
+    "id": "enc_apport",
+    "label": "Apports, emprunts reçus",
+    "direction": "in",
+    "order": 3,
+    "vatRatePct": 0,
+    "excludeFromResultat": true
+  },
+  {
+    "id": "dec_remuneration",
+    "label": "Rémunération du dirigeant",
+    "direction": "out",
+    "order": 10,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_salaires",
+    "label": "Salaires nets",
+    "direction": "out",
+    "order": 11,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_urssaf",
+    "label": "Cotisations sociales (URSSAF, retraite)",
+    "direction": "out",
+    "order": 12,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_tva",
+    "label": "TVA reversée",
+    "direction": "out",
+    "order": 13,
+    "vatRatePct": 0
+  },
+  {
+    "id": "dec_is",
+    "label": "Impôt sur les sociétés",
+    "direction": "out",
+    "order": 14,
+    "vatRatePct": 0,
+    "excludeFromResultat": true
+  },
+  {
+    "id": "dec_impots",
+    "label": "Impôts et taxes (CFE...)",
+    "direction": "out",
+    "order": 15,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_achats",
+    "label": "Achats et fournisseurs",
+    "direction": "out",
+    "order": 20,
+    "vatRatePct": 20
+  },
+  {
+    "id": "dec_soustraitance",
+    "label": "Sous-traitance",
+    "direction": "out",
+    "order": 21,
+    "vatRatePct": 20
+  },
+  {
+    "id": "dec_loyer",
+    "label": "Loyer et charges locatives",
+    "direction": "out",
+    "order": 22,
+    "vatRatePct": 20,
+    "fixed": true
+  },
+  {
+    "id": "dec_leasing",
+    "label": "Leasing et crédit-bail",
+    "direction": "out",
+    "order": 23,
+    "vatRatePct": 20,
+    "fixed": true
+  },
+  {
+    "id": "dec_abonnements",
+    "label": "Logiciels et abonnements",
+    "direction": "out",
+    "order": 24,
+    "vatRatePct": 20,
+    "fixed": true
+  },
+  {
+    "id": "dec_telecom",
+    "label": "Téléphone et internet",
+    "direction": "out",
+    "order": 25,
+    "vatRatePct": 20,
+    "fixed": true
+  },
+  {
+    "id": "dec_assurance",
+    "label": "Assurances",
+    "direction": "out",
+    "order": 26,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_honoraires",
+    "label": "Honoraires (comptable, conseil)",
+    "direction": "out",
+    "order": 27,
+    "vatRatePct": 20,
+    "fixed": true
+  },
+  {
+    "id": "dec_vehicules",
+    "label": "Véhicules et carburant",
+    "direction": "out",
+    "order": 28,
+    "vatRatePct": 20
+  },
+  {
+    "id": "dec_deplacements",
+    "label": "Déplacements",
+    "direction": "out",
+    "order": 29,
+    "vatRatePct": 10
+  },
+  {
+    "id": "dec_restaurants",
+    "label": "Repas et réceptions",
+    "direction": "out",
+    "order": 30,
+    "vatRatePct": 10
+  },
+  {
+    "id": "dec_materiel",
+    "label": "Matériel et fournitures",
+    "direction": "out",
+    "order": 31,
+    "vatRatePct": 20
+  },
+  {
+    "id": "dec_pub",
+    "label": "Publicité et communication",
+    "direction": "out",
+    "order": 32,
+    "vatRatePct": 20
+  },
+  {
+    "id": "dec_banque",
+    "label": "Frais bancaires",
+    "direction": "out",
+    "order": 33,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_emprunts",
+    "label": "Remboursements d'emprunt",
+    "direction": "out",
+    "order": 34,
+    "vatRatePct": 0,
+    "fixed": true
+  },
+  {
+    "id": "dec_investissement",
+    "label": "Investissements (matériel immobilisé)",
+    "direction": "out",
+    "order": 35,
+    "vatRatePct": 20,
+    "excludeFromResultat": true,
+    "amortissementMois": 36
+  },
+  {
+    "id": "dec_cca_remboursement",
+    "label": "Remboursement du compte courant d'associé",
+    "direction": "out",
+    "order": 36,
+    "vatRatePct": 0,
+    "excludeFromResultat": true
+  },
+  {
+    "id": "dec_divers",
+    "label": "Divers",
+    "direction": "out",
+    "order": 40,
+    "vatRatePct": 0
+  }
+]

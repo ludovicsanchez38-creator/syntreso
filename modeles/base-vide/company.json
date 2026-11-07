@@ -1,0 +1,26 @@
+{
+  "name": "Mon entreprise",
+  "sector": "à préciser",
+  "location": "à préciser",
+  "employees": 0,
+  "lowCashThresholdCents": 0,
+  "capitalSocialCents": 0,
+  "importedAt": {},
+  "businessAssumptions": [],
+  "seasonality": { "enabled": false, "monthly": [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1] },
+  "fiscal": {
+    "amountsAreTTC": true,
+    "tvaRegime": "réel normal mensuel",
+    "tva": { "autoCompute": false, "payDayOfMonth": 22, "categoryId": "dec_tva" },
+    "tns": {
+      "autoCompute": false,
+      "remunerationCategoryId": "dec_remuneration",
+      "provisionCategoryId": "dec_urssaf",
+      "cotisationTauxPct": 45,
+      "cotisationTauxApresAcrePct": 45,
+      "dividendesTauxPct": 45
+    },
+    "is": { "seuilReduitCents": 4250000, "tauxReduitPct": 15, "tauxNormalPct": 25, "autoDecaissement": false, "categoryId": "dec_is", "payMonth": "05" },
+    "flatTaxPct": 31.4
+  }
+}

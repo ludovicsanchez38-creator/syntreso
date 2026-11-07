@@ -1,0 +1,16 @@
+﻿Compte;Intitulé;Débit;Crédit;Solde
+101300;Capital souscrit appelé versé;;5 000,00;-5 000,00
+411000;Clients;;;
+445660;TVA déductible sur ABS;1 404,71;;1 404,71
+445710;TVA collectée;;6 800,00;-6 800,00
+455000;Associé - compte courant;;205,50;-205,50
+512000;Banque;17 798,00;;17 798,00
+512100;Compte de réserve TVA;2 500,00;;2 500,00
+613200;Locations immobilières;4 500,00;;4 500,00
+625100;Voyages et déplacements;205,50;;205,50
+626000;Frais postaux et télécom;299,97;;299,97
+627000;Services bancaires;12,00;;12,00
+644000;Rémunération du travail de l'exploitant;10 800,00;;10 800,00
+646000;Cotisations sociales exploitant;1 800,00;;1 800,00
+651000;Redevances logiciels;90,00;;90,00
+706000;Prestations de services;;24 000,00;-24 000,00

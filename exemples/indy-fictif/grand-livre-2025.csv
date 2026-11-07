@@ -1,0 +1,85 @@
+﻿Grand livre 2025;;;;
+101300;Capital souscrit appelé versé;Debit;Credit;Solde
+01/09/2025;Apport en capital;;5 000,00;-5 000,00
+Totaux du poste 101300;;;5 000,00;-5 000,00
+411000;Clients;Debit;Credit;Solde
+15/09/2025;Facture 202509-1 Client Alpha;2 400,00;;2 400,00
+15/09/2025;202509-1 - CLIENT ALPHA;;2 400,00;
+14/10/2025;Facture 202510-1 Client Alpha;3 600,00;;3 600,00
+14/10/2025;202510-1 - CLIENT ALPHA;;3 600,00;
+18/11/2025;Facture 202511-1 Client Alpha;1 800,00;;1 800,00
+18/11/2025;202511-1 - CLIENT ALPHA;;1 800,00;
+16/12/2025;Facture 202512-1 Client Alpha;4 200,00;;4 200,00
+16/12/2025;202512-1 - CLIENT ALPHA;;4 200,00;
+Totaux du poste 411000;;12 000,00;12 000,00;
+445660;TVA déductible sur ABS;Debit;Credit;Solde
+02/09/2025;Loyer bureau;100,00;;100,00
+05/09/2025;Prelevement TELECOM DURANCE;6,67;;106,67
+02/10/2025;Loyer bureau octobre;100,00;;206,67
+05/10/2025;Prelevement TELECOM DURANCE;6,67;;213,34
+02/11/2025;Loyer bureau;100,00;;313,34
+05/11/2025;Prelevement TELECOM DURANCE;6,67;;320,01
+02/12/2025;Loyer bureau;100,00;;420,01
+05/12/2025;Prelevement TELECOM DURANCE;6,67;;426,68
+Totaux du poste 445660;;426,68;;426,68
+445710;TVA collectée;Debit;Credit;Solde
+15/09/2025;Facture 202509-1 Client Alpha;;400,00;-400,00
+14/10/2025;Facture 202510-1 Client Alpha;;600,00;-1 000,00
+18/11/2025;Facture 202511-1 Client Alpha;;300,00;-1 300,00
+16/12/2025;Facture 202512-1 Client Alpha;;700,00;-2 000,00
+Totaux du poste 445710;;;2 000,00;-2 000,00
+512000;Banque;Debit;Credit;Solde
+01/09/2025;Apport en capital;5 000,00;;5 000,00
+02/09/2025;Loyer bureau;;600,00;4 400,00
+05/09/2025;Prelevement TELECOM DURANCE;;40,00;4 360,00
+15/09/2025;202509-1 - CLIENT ALPHA;2 400,00;;6 760,00
+28/09/2025;Virement Remuneration gerant;;1 000,00;5 760,00
+02/10/2025;Loyer bureau octobre;;600,00;5 160,00
+05/10/2025;Prelevement TELECOM DURANCE;;40,00;5 120,00
+14/10/2025;202510-1 - CLIENT ALPHA;3 600,00;;8 720,00
+28/10/2025;Virement Remuneration gerant;;1 000,00;7 720,00
+02/11/2025;Loyer bureau;;600,00;7 120,00
+05/11/2025;Prelevement TELECOM DURANCE;;40,00;7 080,00
+18/11/2025;202511-1 - CLIENT ALPHA;1 800,00;;8 880,00
+20/11/2025;URSSAF Cotisations;;450,00;8 430,00
+25/11/2025;Depot sous-compte;;500,00;7 930,00
+28/11/2025;Virement Remuneration gerant;;1 000,00;6 930,00
+02/12/2025;Loyer bureau;;600,00;6 330,00
+05/12/2025;Prelevement TELECOM DURANCE;;40,00;6 290,00
+16/12/2025;202512-1 - CLIENT ALPHA;4 200,00;;10 490,00
+28/12/2025;Virement Remuneration gerant;;1 000,00;9 490,00
+31/12/2025;Frais bancaires;;12,00;9 478,00
+Totaux du poste 512000;;17 000,00;7 522,00;9 478,00
+512100;Compte de réserve TVA;Debit;Credit;Solde
+25/11/2025;Depot sous-compte;500,00;;500,00
+Totaux du poste 512100;;500,00;;500,00
+613200;Locations immobilières;Debit;Credit;Solde
+02/09/2025;Loyer bureau;500,00;;500,00
+02/10/2025;Loyer bureau octobre;500,00;;1 000,00
+02/11/2025;Loyer bureau;500,00;;1 500,00
+02/12/2025;Loyer bureau;500,00;;2 000,00
+Totaux du poste 613200;;2 000,00;;2 000,00
+626000;Frais postaux et télécom;Debit;Credit;Solde
+05/09/2025;Prelevement TELECOM DURANCE;33,33;;33,33
+05/10/2025;Prelevement TELECOM DURANCE;33,33;;66,66
+05/11/2025;Prelevement TELECOM DURANCE;33,33;;99,99
+05/12/2025;Prelevement TELECOM DURANCE;33,33;;133,32
+Totaux du poste 626000;;133,32;;133,32
+627000;Services bancaires;Debit;Credit;Solde
+31/12/2025;Frais bancaires;12,00;;12,00
+Totaux du poste 627000;;12,00;;12,00
+644000;Rémunération du travail de l'exploitant;Debit;Credit;Solde
+28/09/2025;Virement Remuneration gerant;1 000,00;;1 000,00
+28/10/2025;Virement Remuneration gerant;1 000,00;;2 000,00
+28/11/2025;Virement Remuneration gerant;1 000,00;;3 000,00
+28/12/2025;Virement Remuneration gerant;1 000,00;;4 000,00
+Totaux du poste 644000;;4 000,00;;4 000,00
+646000;Cotisations sociales exploitant;Debit;Credit;Solde
+20/11/2025;URSSAF Cotisations;450,00;;450,00
+Totaux du poste 646000;;450,00;;450,00
+706000;Prestations de services;Debit;Credit;Solde
+15/09/2025;Facture 202509-1 Client Alpha;;2 000,00;-2 000,00
+14/10/2025;Facture 202510-1 Client Alpha;;3 000,00;-5 000,00
+18/11/2025;Facture 202511-1 Client Alpha;;1 500,00;-6 500,00
+16/12/2025;Facture 202512-1 Client Alpha;;3 500,00;-10 000,00
+Totaux du poste 706000;;;10 000,00;-10 000,00

@@ -1,0 +1,10 @@
+{
+  "_lisezMoi": "Réglages adaptés aux exports fictifs de ce dossier : sous-compte de réserve TVA 512100, rémunération du gérant passée au compte 644.",
+  "indy": {
+    "comptesBancaires": {
+      "courant": ["512"],
+      "sousComptes": [{ "compte": "512100", "role": "tva", "libelle": "Réserve TVA" }]
+    },
+    "contreparties": [{ "compte": "644", "categorie": "dec_remuneration" }]
+  }
+}

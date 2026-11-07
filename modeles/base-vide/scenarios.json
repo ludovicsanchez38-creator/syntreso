@@ -1,0 +1,117 @@
+[
+  {
+    "id": "sc_embauche",
+    "label": "Embaucher une personne",
+    "description": "Coût chargé mensuel + équipement initial, à partir du mois choisi.",
+    "active": false,
+    "params": { "startMonth": "+2", "monthlyCostCents": 300000, "oneOffCents": 150000 },
+    "sliders": [
+      { "key": "startMonth", "label": "Mois d'embauche", "type": "month", "min": "+1", "max": "+12" },
+      { "key": "monthlyCostCents", "label": "Coût chargé / mois", "type": "amount", "min": 150000, "max": 600000, "step": 10000 }
+    ]
+  },
+  {
+    "id": "sc_invest",
+    "label": "Investir dans un équipement",
+    "description": "Achat comptant ou passage en leasing 36 mois.",
+    "active": false,
+    "params": { "month": "+2", "amountCents": 2000000, "mode": "cash" },
+    "sliders": [
+      { "key": "month", "label": "Mois d'achat", "type": "month", "min": "+1", "max": "+12" },
+      { "key": "amountCents", "label": "Prix d'achat", "type": "amount", "min": 200000, "max": 8000000, "step": 100000 },
+      { "key": "mode", "label": "Financement", "type": "toggle", "options": ["cash", "leasing"] }
+    ]
+  },
+  {
+    "id": "sc_achat",
+    "label": "Achat ponctuel de matériel",
+    "description": "Dépense ponctuelle le mois choisi.",
+    "active": false,
+    "params": { "month": "+2", "amountCents": 300000 },
+    "sliders": [
+      { "key": "amountCents", "label": "Montant", "type": "amount", "min": 50000, "max": 2000000, "step": 50000 },
+      { "key": "month", "label": "Mois", "type": "month", "min": "+1", "max": "+12" }
+    ]
+  },
+  {
+    "id": "sc_pret",
+    "label": "Prêt bancaire",
+    "description": "Entrée du capital emprunté puis remboursements mensuels.",
+    "active": false,
+    "params": { "month": "+1", "amountCents": 2000000, "monthlyRepayCents": 60000 },
+    "sliders": [
+      { "key": "amountCents", "label": "Montant emprunté", "type": "amount", "min": 500000, "max": 10000000, "step": 100000 },
+      { "key": "monthlyRepayCents", "label": "Mensualité", "type": "amount", "min": 10000, "max": 500000, "step": 10000 }
+    ]
+  },
+  {
+    "id": "sc_retard_enc",
+    "label": "Retard d'un gros encaissement",
+    "description": "Décale un encaissement attendu de quelques mois.",
+    "active": false,
+    "params": { "month": "+1", "amountCents": 1000000, "delayMonths": 2 },
+    "sliders": [
+      { "key": "amountCents", "label": "Montant", "type": "amount", "min": 100000, "max": 5000000, "step": 50000 },
+      { "key": "month", "label": "Mois attendu", "type": "month", "min": "0", "max": "+6" }
+    ]
+  },
+  {
+    "id": "sc_recurrent",
+    "label": "Nouveau revenu récurrent",
+    "description": "Encaissement mensuel supplémentaire (contrat, abonnement client...).",
+    "active": false,
+    "params": { "startMonth": "+2", "monthlyCents": 100000 },
+    "sliders": [
+      { "key": "monthlyCents", "label": "Récurrent / mois", "type": "amount", "min": 10000, "max": 1000000, "step": 10000 },
+      { "key": "startMonth", "label": "À partir de", "type": "month", "min": "+1", "max": "+12" }
+    ]
+  },
+  {
+    "id": "sc_pipe_prudent",
+    "label": "Scénario prudent (encaissements prévus -30 %)",
+    "description": "Réduit les encaissements de ventes et prestations prévus.",
+    "active": false,
+    "params": { "fromMonth": "+1", "reductionPct": 30 },
+    "sliders": []
+  },
+  {
+    "id": "sc_pipe_optimiste",
+    "label": "Scénario optimiste (encaissements prévus +20 %)",
+    "description": "Augmente les encaissements de ventes et prestations prévus.",
+    "active": false,
+    "params": { "fromMonth": "+1", "increasePct": 20 },
+    "sliders": []
+  },
+  {
+    "id": "sc_rem_up",
+    "label": "Augmenter la rémunération du dirigeant",
+    "description": "Rémunération supplémentaire par mois (et cotisations associées si le pilotage TNS est activé).",
+    "active": false,
+    "params": { "startMonth": "+1", "extraMonthlyCents": 50000 },
+    "sliders": [
+      { "key": "extraMonthlyCents", "label": "Rémunération en plus / mois", "type": "amount", "min": 0, "max": 300000, "step": 10000 },
+      { "key": "startMonth", "label": "À partir de", "type": "month", "min": "+1", "max": "+12" }
+    ]
+  },
+  {
+    "id": "sc_arret_maladie",
+    "label": "Arrêt maladie du dirigeant",
+    "description": "Le dirigeant s'arrête deux mois : plus aucun encaissement sur la période, indemnités journalières nulles par défaut.",
+    "active": false,
+    "params": { "startMonth": "+1", "durationMonths": 2, "dailyAllowanceCents": 0, "waitingDays": 3 },
+    "sliders": [
+      { "key": "startMonth", "label": "Mois de début d'arrêt", "type": "month", "min": "+1", "max": "+12" }
+    ]
+  },
+  {
+    "id": "sc_dividendes",
+    "label": "Se verser des dividendes",
+    "description": "Sortir une enveloppe de trésorerie en dividendes (après IS). Le comparateur rémunération ou dividendes chiffre le net en poche.",
+    "active": false,
+    "params": { "month": "+6", "grossCostCents": 1000000 },
+    "sliders": [
+      { "key": "month", "label": "Mois de distribution", "type": "month", "min": "+1", "max": "+12" },
+      { "key": "grossCostCents", "label": "Enveloppe sortie de la société", "type": "amount", "min": 200000, "max": 5000000, "step": 100000 }
+    ]
+  }
+]

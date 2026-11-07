@@ -1,0 +1,29 @@
+# Syntréso sur un serveur (VPS) avec Docker.
+#
+#   cp .env.exemple .env      puis renseigner SYNTRESO_JETON (ou lancer ./install-vps.sh)
+#   docker compose up -d --build
+#
+# L'appli n'écoute que sur 127.0.0.1 du serveur : pour y accéder depuis l'extérieur,
+# passer par un reverse proxy HTTPS (Caddy, voir README) ou un tunnel SSH.
+services:
+  syntreso:
+    build: .
+    image: ${SYNTRESO_IMAGE:-syntreso:1.0.0}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      # valeurs propres au conteneur (prioritaires sur .env)
+      SYNTRESO_HOST: 0.0.0.0
+      SYNTRESO_PORT: "3900"
+      SYNTRESO_DATA_DIR: /donnees
+      SYNTRESO_ENTREE_INDY: /entree-indy
+      SYNTRESO_REGLAGES: /app/config/reglages.json
+    ports:
+      - "127.0.0.1:${SYNTRESO_PORT:-3900}:3900"
+    volumes:
+      - syntreso-donnees:/donnees
+      - ./entree-indy:/entree-indy
+      - ./config:/app/config:ro
+
+volumes:
+  syntreso-donnees:

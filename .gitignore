@@ -1,0 +1,8 @@
+node_modules/
+.env
+donnees/
+entree-indy/*
+!entree-indy/LISEZMOI.txt
+config/reglages.json
+*.log
+.DS_Store
