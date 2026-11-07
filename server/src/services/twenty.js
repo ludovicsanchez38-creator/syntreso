@@ -48,15 +48,37 @@ export const STAGE_WEIGHTS = REGLAGES_PAR_DEFAUT.twenty.ponderations
 export async function readTwentyPipe({ baseUrl, apiKey, fetchImpl = fetch } = {}) {
   if (!baseUrl) throw new Error('TWENTY_URL manquant')
   if (!apiKey) throw new Error('TWENTY_KEY manquant')
-  const url = `${baseUrl.replace(/\/$/, '')}/rest/opportunities?limit=200`
-  const resp = await fetchImpl(url, { headers: { Authorization: `Bearer ${apiKey}` } })
-  if (!resp.ok) {
-    throw new Error(`Twenty API ${resp.status} ${resp.statusText}`)
+  const url = new URL(`${baseUrl.replace(/\/$/, '')}/rest/opportunities`)
+  url.searchParams.set('limit', '200')
+  const pipe = []
+  const cursors = new Set()
+  let totalCount
+  while (true) {
+    const resp = await fetchImpl(url.toString(), { headers: { Authorization: `Bearer ${apiKey}` } })
+    if (!resp.ok) throw new Error(`Twenty API ${resp.status} ${resp.statusText}`)
+    const body = await resp.json()
+    const opps = body?.data?.opportunities
+    if (!Array.isArray(opps)) throw new Error('Réponse Twenty inattendue (data.opportunities absent)')
+    pipe.push(...opps.map(normalizeOpp))
+    if (Number.isInteger(body.totalCount)) totalCount = body.totalCount
+    const pageInfo = body.pageInfo ?? body.data.pageInfo
+    if (!pageInfo) {
+      // Compatibilité avec une petite réponse sans pagination. Une page pleine
+      // ne prouve pas que le pipe est complet : on refuse de la valider.
+      if (opps.length >= 200 || cursors.size) throw new Error('Twenty pagination incomplète : indication de fin absente')
+      break
+    }
+    if (typeof pageInfo.hasNextPage !== 'boolean') throw new Error('Twenty pagination incomplète : indication de suite invalide')
+    if (!pageInfo.hasNextPage) break
+    const cursor = pageInfo.endCursor
+    if (!opps.length || typeof cursor !== 'string' || !cursor || cursors.has(cursor)) {
+      throw new Error('Twenty pagination : curseur de suite absent ou répété')
+    }
+    cursors.add(cursor)
+    url.searchParams.set('starting_after', cursor)
   }
-  const body = await resp.json()
-  const opps = body?.data?.opportunities
-  if (!Array.isArray(opps)) throw new Error('Réponse Twenty inattendue (data.opportunities absent)')
-  return opps.map(normalizeOpp)
+  if (totalCount !== undefined && pipe.length !== totalCount) throw new Error('Twenty pagination incomplète : total reçu incohérent')
+  return pipe
 }
 
 /** Normalise une opportunité Twenty brute en structure interne. */
