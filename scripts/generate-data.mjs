@@ -1,4 +1,4 @@
-// Générateur de données fictives Syntréso - Bâti Provence SARL (TPE BTP, Manosque)
+// Générateur de données fictives Syntréso - Maçonnerie des Trois Collines SARL (TPE BTP, Manosque)
 // Sortie déterministe : PRNG seedé, date du jour figée. Relancer = mêmes fichiers.
 //
 // Période réalisé : 2025-04-01 -> 2026-06-10 (demoToday)
@@ -515,7 +515,7 @@ const scenarios = [
 
 // ---------------------------------------------------------------- Fichiers de sortie
 const company = {
-  name: 'Bâti Provence SARL',
+  name: 'Maçonnerie des Trois Collines SARL',
   sector: 'BTP - gros œuvre et rénovation',
   location: 'Manosque (04)',
   employees: 10,

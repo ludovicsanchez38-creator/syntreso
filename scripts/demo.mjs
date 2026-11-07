@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Charge les données de DÉMONSTRATION (entreprise fictive « Bâti Provence SARL », TPE du
+// Charge les données de DÉMONSTRATION (entreprise fictive « Maçonnerie des Trois Collines SARL », TPE du
 // bâtiment, date figée au 10/06/2026). Pratique pour découvrir l'appli avant d'importer
 // sa propre compta.
 //

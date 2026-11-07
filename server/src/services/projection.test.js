@@ -22,7 +22,7 @@ import { buildDossierHTML } from './export-dossier.js'
 import { computeAlerts } from './alerts.js'
 
 // Les tests "données seedées" valident le couple seed démo -> moteur. On seede la
-// démo Bâti Provence dans un dossier TEMPORAIRE et on y pointe loadState via
+// démo Maçonnerie des Trois Collines dans un dossier TEMPORAIRE et on y pointe loadState via
 // SYNTRESO_DATA_DIR, pour rester déterministe quelles que soient les données qui
 // vivent dans le dossier donnees/ (par exemple les vraies données).
 const HERE = path.dirname(fileURLToPath(import.meta.url))

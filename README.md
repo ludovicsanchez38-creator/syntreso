@@ -46,7 +46,7 @@ Syntréso s'installe chez vous (serveur Linux avec Docker, ou Mac) et vos donné
 
 ## 2. Essayer sur la démonstration (données fictives)
 
-La démonstration installe une entreprise fictive du bâtiment, Bâti Provence, avec une date figée au 10 juin 2026. Aucune donnée réelle, aucun compte à créer, assistant coupé.
+La démonstration installe une entreprise fictive du bâtiment, Maçonnerie des Trois Collines, avec une date figée au 10 juin 2026. Aucune donnée réelle, aucun compte à créer, assistant coupé.
 
 Sur Linux ou Mac, avec **Node.js 22 ou plus récent** :
 

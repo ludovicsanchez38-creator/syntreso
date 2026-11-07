@@ -40,7 +40,7 @@ const NAV = [
 ]
 
 // Identité de l'entreprise pilotée, lue depuis /api/state (jamais codée en dur :
-// le même build sert la démo Bâti Provence et les vraies données de l'entreprise).
+// le même build sert la démo Maçonnerie des Trois Collines et les vraies données de l'entreprise).
 function SidebarCompany() {
   const state = useAppState()
   const company = state.data?.company
