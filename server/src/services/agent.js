@@ -411,6 +411,14 @@ async function doResolveProposal(id, action, amendments = {}) {
     if (invalid) return { error: invalid, status: 400 }
 
     forecast = await readJsonOr('forecast', [])
+    if (proposal.source === 'twenty-sync') {
+      const currentCents = forecast
+        .filter((f) => f.month === payload.month && f.categoryId === payload.categoryId)
+        .reduce((sum, f) => sum + f.amountCents, 0)
+      if (payload.month !== proposal.payload.month || !Number.isInteger(proposal.context?.currentCents) || currentCents !== proposal.context.currentCents) {
+        return { error: 'proposition Twenty périmée : relancez la synchronisation', status: 409 }
+      }
+    }
     // Catégorie pilotée par le moteur (TVA/URSSAF/IS dérivées) : l'ajustement validé
     // vit dans SA propre ligne (suffixe _agent), jamais fusionné avec la moyenne
     // importée - sinon le moteur ne peut plus distinguer le mort (neutralisé) du

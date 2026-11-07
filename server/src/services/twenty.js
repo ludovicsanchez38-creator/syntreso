@@ -16,8 +16,8 @@
 //     (store.js) -> mono-process, pas de last-write-wins entre ce sync, un PATCH
 //     forecast et une confirmation. Une tâche planifiée doit appeler l'ENDPOINT HTTP
 //     (même process que le serveur web) : tout passe donc par le même verrou applicatif.
-//   - Idempotence : on ne recrée pas une proposition Twenty identique déjà en attente
-//     pour le même mois (sinon chaque synchronisation empilerait des doublons).
+//   - Une seule proposition Twenty en attente par mois/catégorie, fondée sur la
+//     dernière cible et le montant de départ (les anciennes deviennent rejetées).
 
 import { readJsonOr, readJson, updateJson, appendAudit, withDataSnapshot } from './store.js'
 import { monthOf, addMonths, monthRange, todayFor } from './dates.js'
@@ -199,37 +199,41 @@ let twentyProposalSeq = 0
 
 /**
  * Crée des propositions `forecast_line` (en attente) pour chaque delta pipe, via le verrou
- * de données (updateJson). Idempotent : ne recrée pas une proposition Twenty identique déjà
- * en attente pour le même mois (même categoryId + même montant signé). Le verrou garantit
- * qu'aucun PATCH forecast / confirmation ne s'intercale pendant la lecture-écriture.
- *
- * Le décompte créées/sautées est recalculé par le caller (syncTwenty) en relisant le
- * fichier avant/après, pour rester robuste sans faire fuiter d'état du mutator.
+ * de données (updateJson). Remplace les propositions périmées, y compris si le pipe
+ * disparaît ou passe sous le seuil. Conserve une proposition strictement identique.
  */
-async function emitPipeProposals(deltas) {
-  if (!deltas.length) return { skipped: true }
-
-  return updateJson(
+async function emitPipeProposals(deltas, months, categoryId) {
+  let created = 0
+  let skipped = 0
+  await updateJson(
     'proposals',
     (proposals) => {
       const list = Array.isArray(proposals) ? proposals : []
-      const created = []
-      for (const d of deltas) {
-        const label = `Pipe Twenty - ajustement ${d.month} (${d.deltaCents >= 0 ? 'hausse' : 'baisse'})`
-        // Déjà une proposition Twenty en attente identique (même mois, même catégorie,
-        // même montant) ? -> on saute (idempotence entre deux synchronisations).
-        const dup = list.some(
+      let changed = false
+      for (const month of months) {
+        const d = deltas.find((delta) => delta.month === month)
+        const pending = list.filter(
           (p) =>
             p.status === 'pending' &&
             p.kind === 'forecast_line' &&
             p.source === 'twenty-sync' &&
-            p.payload?.month === d.month &&
-            p.payload?.categoryId === d.categoryId &&
-            p.payload?.amountCents === d.deltaCents,
+            p.payload?.month === month &&
+            p.payload?.categoryId === categoryId,
         )
-        if (dup) {
+        const identical = d && pending.find((p) => p.payload.amountCents === d.deltaCents && p.context?.currentCents === d.currentCents && p.context?.targetCents === d.targetCents)
+        for (const p of pending) {
+          if (p === identical) continue
+          p.status = 'rejected'
+          p.resolvedAt = new Date().toISOString()
+          p.resolutionReason = 'Remplacée par une synchronisation Twenty plus récente.'
+          changed = true
+        }
+        if (!d) continue
+        if (identical) {
+          skipped += 1
           continue
         }
+        const label = `Pipe Twenty - ajustement ${d.month} (hausse)`
         twentyProposalSeq += 1
         const proposal = {
           id: `prop_tw_${Date.now().toString(36)}_${twentyProposalSeq}`,
@@ -252,14 +256,16 @@ async function emitPipeProposals(deltas) {
           },
         }
         list.push(proposal)
-        created.push(proposal)
+        created += 1
+        changed = true
       }
       // si rien de neuf, ne pas réécrire le fichier (updateJson skip sur undefined)
-      if (!created.length) return undefined
+      if (!changed) return undefined
       return list
     },
     [],
   )
+  return { created, skipped }
 }
 
 // ------------------------------------------------------------------ Point d'entrée du sync
@@ -287,7 +293,7 @@ export async function syncTwenty({ baseUrl, apiKey, fetchImpl = fetch, dryRun = 
   }
 
   const pipe = await readTwentyPipe({ baseUrl: resolvedBase, apiKey: resolvedKey, fetchImpl })
-  const { weightedTotalCents } = pipeForecastByMonth(pipe, state)
+  const { weightedTotalCents, months } = pipeForecastByMonth(pipe, state)
   const deltas = computePipeDeltas(state, pipe)
 
   if (dryRun) {
@@ -303,14 +309,7 @@ export async function syncTwenty({ baseUrl, apiKey, fetchImpl = fetch, dryRun = 
     }
   }
 
-  // Émission via le verrou. On compte créées/sautées en relisant l'effet.
-  const before = await readJsonOr('proposals', [])
-  const beforePending = before.filter((p) => p.source === 'twenty-sync' && p.status === 'pending').length
-  await emitPipeProposals(deltas)
-  const after = await readJsonOr('proposals', [])
-  const afterPending = after.filter((p) => p.source === 'twenty-sync' && p.status === 'pending').length
-  const proposalsCreated = Math.max(0, afterPending - beforePending)
-  const proposalsSkipped = deltas.length - proposalsCreated
+  const { created: proposalsCreated, skipped: proposalsSkipped } = await emitPipeProposals(deltas, months, categorie)
 
   // Marqueur de fraîcheur : la source commerciale (twenty) vient d'être relue. On met à
   // jour company.importedAt.twenty (le bandeau de fraîcheur côté front s'appuie dessus).
