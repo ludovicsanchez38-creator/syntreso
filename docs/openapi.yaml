@@ -50,7 +50,7 @@ tags:
 - name: Intégrations
   description: 'Twenty (pipe commercial) et recalage des charges : produisent des propositions.'
 - name: Assistant intégré
-  description: Assistant IA embarqué dans l'interface (optionnel, désactivé sans clé).
+  description: Assistant IA embarqué dans l'interface (optionnel, coupé sans clé d'API ou par son interrupteur).
 paths:
   /api/health:
     get:
@@ -1062,7 +1062,7 @@ paths:
       tags:
       - Assistant intégré
       summary: L'assistant IA intégré est-il actif ?
-      description: Indique si l'assistant intégré est utilisable (clé présente, SYNTRESO_ASSISTANT) et pourquoi.
+      description: Indique si l'assistant intégré est utilisable (clé d'API ANTHROPIC_API_KEY présente, interrupteur SYNTRESO_ASSISTANT et réglage assistant.actif) et pourquoi.
       operationId: statutAssistant
       responses:
         '200':

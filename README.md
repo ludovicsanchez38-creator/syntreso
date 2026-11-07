@@ -1,31 +1,71 @@
 # Syntréso
 
-Syntréso est un outil de pilotage de trésorerie pour une petite entreprise. Il lit votre comptabilité **Indy**, en tire la situation réelle de la banque, et projette les 18 prochains mois : solde disponible une fois la TVA et les cotisations mises de côté, point bas à venir, autonomie en mois, échéances datées, résultat prévisionnel. Il répond aux questions de dirigeant (« puis-je me verser 2 000 EUR ce mois-ci ? », « et si j'embauche en janvier ? ») avec un feu vert, ambre ou rouge calculé à partir des chiffres.
+**Pilotage de trésorerie pour TPE, en logiciel libre.** Conçue par Ludo Sanchez (Synoptïa). Licence [AGPL-3.0](LICENSE).
 
-Il se branche sur votre CRM **Twenty** pour transformer le pipe commercial en encaissements prévus, et s'utilise aussi bien dans le navigateur que par votre **agent IA** grâce à une API documentée.
+Syntréso lit votre comptabilité **Indy**, en tire la situation réelle de la banque et projette les 18 prochains mois : solde disponible une fois la TVA et les cotisations mises de côté, point bas à venir, autonomie en mois, échéances datées, résultat prévisionnel. Elle répond aux questions de dirigeant (« puis-je me verser 2 000 EUR ce mois-ci ? », « et si j'embauche en janvier ? ») avec un feu vert, ambre ou rouge calculé à partir des chiffres.
+
+Elle se branche sur votre CRM **Twenty** pour transformer le pipe commercial en encaissements prévus, et s'utilise aussi bien dans le navigateur que par votre **agent IA** grâce à une API documentée.
 
 Une règle traverse tout l'outil : **l'agent propose, vous validez, le serveur écrit**. Aucune écriture issue d'un agent, du CRM ou d'un calcul automatique n'entre dans le prévisionnel sans votre clic.
+
+Syntréso s'installe chez vous (serveur Linux avec Docker, ou Mac) et vos données restent sur votre machine. Elle est fournie telle quelle, sans garantie ni assistance due (voir [Licence](#16-licence)).
 
 ---
 
 ## Sommaire
 
-1. [Ce qu'il y a dans ce dossier](#1-ce-quil-y-a-dans-ce-dossier)
-2. [Installation sur un serveur (VPS, Docker)](#2-installation-sur-un-serveur-vps-docker)
-3. [Installation sur un Mac](#3-installation-sur-un-mac)
-4. [Créer la base : votre entreprise ou la démo](#4-créer-la-base--votre-entreprise-ou-la-démo)
-5. [Premier import Indy](#5-premier-import-indy)
-6. [Brancher Twenty](#6-brancher-twenty)
-7. [Brancher votre agent IA](#7-brancher-votre-agent-ia)
-8. [L'assistant IA intégré (optionnel)](#8-lassistant-ia-intégré-optionnel)
-9. [Sauvegarde et restauration](#9-sauvegarde-et-restauration)
-10. [Mise à jour](#10-mise-à-jour)
-11. [Sécurité](#11-sécurité)
-12. [En cas de problème](#12-en-cas-de-problème)
+1. [Ce que fait Syntréso](#1-ce-que-fait-syntréso)
+2. [Essayer sur la démonstration (données fictives)](#2-essayer-sur-la-démonstration-données-fictives)
+3. [Ce qu'il y a dans ce dépôt](#3-ce-quil-y-a-dans-ce-dépôt)
+4. [Installation sur un serveur (Docker)](#4-installation-sur-un-serveur-docker)
+5. [Installation sur un Mac](#5-installation-sur-un-mac)
+6. [Créer la base : votre entreprise ou la démo](#6-créer-la-base--votre-entreprise-ou-la-démo)
+7. [Premier import Indy](#7-premier-import-indy)
+8. [Brancher Twenty](#8-brancher-twenty)
+9. [Brancher votre agent IA](#9-brancher-votre-agent-ia)
+10. [L'assistant IA intégré (optionnel, clé d'API)](#10-lassistant-ia-intégré-optionnel-clé-dapi)
+11. [Sauvegarde et restauration](#11-sauvegarde-et-restauration)
+12. [Mise à jour](#12-mise-à-jour)
+13. [Sécurité](#13-sécurité)
+14. [Limites](#14-limites)
+15. [En cas de problème](#15-en-cas-de-problème)
+16. [Licence](#16-licence)
 
 ---
 
-## 1. Ce qu'il y a dans ce dossier
+## 1. Ce que fait Syntréso
+
+- **Tableau de bord** : une phrase sur les 90 prochains jours (point bas, disponible net sous le seuil), le compte courant, ce qui est mis de côté pour la TVA et les cotisations, la trésorerie projetée en fin d'année, la courbe du solde réalisé puis projeté, les échéances datées et ce qui sort de l'ordinaire (factures en retard, dépense inhabituelle, écart de réconciliation).
+- **Prévisionnel** sur 18 mois, catégorie par catégorie, alimenté par la médiane de vos mois récents et corrigé à la main. La TVA, les cotisations et l'impôt sur les sociétés sont recalculés à partir des flux.
+- **Décider** : « puis-je me verser ? » et, selon votre situation, rémunération ou dividendes et remboursement du compte courant d'associé, chacun avec son verdict et ses hypothèses.
+- **Scénarios** : embauche, investissement, prêt, retard d'un gros encaissement, arrêt maladie du dirigeant, dividendes et quelques autres, dont on voit l'effet sur la courbe avant de décider.
+- **Dossier banquier** imprimable, journal de toutes les modifications.
+- **Import Indy** (grand livre et balance exportés à la main), **Twenty** en option, **API** pour votre agent, **assistant IA intégré** en option avec votre clé d'API Anthropic.
+
+---
+
+## 2. Essayer sur la démonstration (données fictives)
+
+La démonstration installe une entreprise fictive du bâtiment, Bâti Provence, avec une date figée au 10 juin 2026. Aucune donnée réelle, aucun compte à créer, assistant coupé.
+
+Sur Linux ou Mac, avec **Node.js 22 ou plus récent** :
+
+```bash
+git clone <adresse-du-dépôt> syntreso && cd syntreso
+npm --prefix server ci --omit=dev
+JETON=$(openssl rand -hex 32)
+sed "s/^SYNTRESO_JETON=.*/SYNTRESO_JETON=$JETON/; s/^SYNTRESO_ASSISTANT=.*/SYNTRESO_ASSISTANT=non/" .env.exemple > .env && chmod 600 .env
+npm run demo
+npm start
+```
+
+Ouvrez `http://127.0.0.1:3900` et collez le jeton (`grep SYNTRESO_JETON .env`). Avec Docker, la même démonstration : `./install-vps.sh` puis `docker compose exec syntreso npm run demo`.
+
+Pour essayer l'import Indy sans vos données, `exemples/indy-fictif/` contient des exports fictifs et leur mode d'emploi.
+
+---
+
+## 3. Ce qu'il y a dans ce dépôt
 
 | Élément | Rôle |
 |---|---|
@@ -40,20 +80,20 @@ Une règle traverse tout l'outil : **l'agent propose, vous validez, le serveur �
 | `docs/GUIDE-AGENT.md` | Le mode d'emploi de l'API pour votre agent |
 | `docs/openapi.yaml` | La description complète de l'API (OpenAPI 3.1) |
 | `docs/REGLAGES.md` | Tous les réglages expliqués |
-| `outils/` | Option : export automatique depuis Indy par navigateur piloté |
 | `install-mac.sh`, `desinstall-mac.sh`, `install-vps.sh` | Scripts d'installation |
 | `Dockerfile`, `docker-compose.yml` | Installation Docker |
+| `LICENSE`, `LICENCES-TIERCES.md` | Licence AGPL-3.0 de Syntréso, licences des composants tiers |
 
-**Pourquoi l'interface est livrée construite** : elle s'installe ainsi sans outils de compilation (ni TypeScript, ni bundler, ni modules natifs propres à chaque processeur). Seules les quatre dépendances du serveur sont téléchargées. Si vous modifiez l'interface (`web/src`), reconstruisez-la avec `npm run build:web`.
+**Pourquoi l'interface est livrée construite** : elle s'installe ainsi sans outils de compilation (ni TypeScript, ni bundler, ni modules natifs propres à chaque processeur). Seules les dépendances du serveur sont téléchargées. Si vous modifiez l'interface (`web/src`), reconstruisez-la avec `npm run build:web`.
 
 ---
 
-## 2. Installation sur un serveur (VPS, Docker)
+## 4. Installation sur un serveur (Docker)
 
 Prérequis : un serveur Linux avec Docker et le greffon `docker compose`.
 
 ```bash
-# copier le dossier syntreso sur le serveur, puis :
+git clone <adresse-du-dépôt> syntreso   # ou copiez le dossier sur le serveur
 cd syntreso
 ./install-vps.sh
 ```
@@ -77,7 +117,7 @@ Commandes utiles :
 ```bash
 docker compose ps                         # état (healthy = en bonne santé)
 docker compose logs -f                    # journal
-docker compose exec syntreso npm run init # créer la base (voir section 4)
+docker compose exec syntreso npm run init # créer la base (voir section 6)
 docker compose restart                    # redémarrer (après une modification de .env)
 ```
 
@@ -99,12 +139,12 @@ Option avancée : [Cloudflare Access](https://developers.cloudflare.com/cloudfla
 
 ---
 
-## 3. Installation sur un Mac
+## 5. Installation sur un Mac
 
 Prérequis : **Node.js 22 ou plus récent** ([nodejs.org](https://nodejs.org), version LTS, ou `brew install node@22`).
 
 ```bash
-cd ~/Applications/syntreso      # ou l'endroit où vous avez décompressé le dossier
+cd ~/Applications/syntreso      # ou l'endroit où vous avez cloné le dépôt
 ./install-mac.sh
 ```
 
@@ -118,7 +158,7 @@ Désinstallation : `./desinstall-mac.sh` retire le démarrage automatique et gar
 
 ---
 
-## 4. Créer la base : votre entreprise ou la démo
+## 6. Créer la base : votre entreprise ou la démo
 
 **Votre entreprise** (base vide, puis import Indy) :
 
@@ -139,7 +179,7 @@ La démo refuse d'écraser une base réelle. Pour repasser de la démo à votre 
 
 ---
 
-## 5. Premier import Indy
+## 7. Premier import Indy
 
 1. Dans Indy : **Documents**, puis **Comptabilité**. Ouvrez le **Grand livre** de l'année, cliquez sur le bouton de téléchargement et choisissez **Excel** (Indy fournit un fichier CSV). Faites de même pour chaque année depuis la création de l'entreprise, puis pour la **Balance** de l'année en cours.
 2. Déposez ces fichiers dans `entree-indy/` (sur le serveur : `scp *.csv utilisateur@serveur:syntreso/entree-indy/`, ou par l'API, voir le guide de l'agent).
@@ -163,11 +203,9 @@ Relancez l'import après chaque changement de réglage. Pour les mises à jour s
 
 Un essai sans vos données : `exemples/indy-fictif/` contient des exports Indy fictifs et les réglages qui vont avec (mode d'emploi dans `exemples/indy-fictif/LISEZMOI.md`).
 
-**Option, export automatique** : `outils/indy-export-navigateur.mjs` télécharge grand livre et balance depuis Indy avec un navigateur piloté (vous vous connectez vous-même une fois, aucun mot de passe n'est stocké). Mode d'emploi en tête du fichier. Les boutons d'Indy peuvent changer : en cas d'échec, l'export à la main reste la référence.
-
 ---
 
-## 6. Brancher Twenty
+## 8. Brancher Twenty
 
 1. Dans Twenty, ouvrez les paramètres, rubrique **API & Webhooks** (Settings, APIs & Webhooks), et créez une clé API.
 2. Dans `.env` : `TWENTY_URL=https://votre-twenty.exemple` (sans `/` final) et `TWENTY_KEY=` la clé. Redémarrez (`docker compose restart` ou relancez le service).
@@ -183,7 +221,7 @@ La synchronisation crée des **propositions** d'encaissement (affaires pondéré
 
 ---
 
-## 7. Brancher votre agent IA
+## 9. Brancher votre agent IA
 
 Donnez à votre agent trois choses :
 
@@ -197,22 +235,32 @@ L'agent dispose ainsi de tout ce qu'il faut pour : lire la situation, simuler un
 
 ---
 
-## 8. L'assistant IA intégré (optionnel)
+## 10. L'assistant IA intégré (optionnel, clé d'API)
 
-L'interface embarque son propre assistant (bouton en bas à droite) : questions en langage naturel, alerte du jour, commentaire du mois, propositions d'écritures. Il s'appuie sur Claude (Anthropic) et reste **désactivé** tant qu'aucune clé n'est fournie ; tout le reste de l'appli fonctionne sans lui.
+L'interface embarque son propre assistant (bouton en bas à droite) : questions en langage naturel, alerte du jour, commentaire du mois, propositions d'écritures. Il s'appuie sur un modèle Claude d'Anthropic par le Claude Agent SDK, et reste **coupé** tant qu'aucune clé n'est fournie ; tout le reste de l'appli fonctionne sans lui.
 
-Pour l'activer, dans `.env`, une des deux options :
+**L'allumer** : créez une clé d'API sur la [console Anthropic](https://platform.claude.com) (facturée à l'usage, sur votre compte) et renseignez-la dans `.env` : `ANTHROPIC_API_KEY=...`. C'est le seul accès accepté. Le modèle se choisit avec `SYNTRESO_AGENT_MODEL` (par défaut `claude-sonnet-5-5`). Redémarrez après modification.
 
-- `ANTHROPIC_API_KEY=` une clé créée sur [console.anthropic.com](https://console.anthropic.com) (facturée à l'usage) ;
-- `CLAUDE_CODE_OAUTH_TOKEN=` un jeton d'abonnement Claude, obtenu avec la commande `claude setup-token` de Claude Code.
+**Le couper entièrement**, au choix :
 
-Sur un Mac où Claude Code est déjà connecté, `SYNTRESO_ASSISTANT=oui` suffit. `SYNTRESO_ASSISTANT=non` le coupe. Le modèle se choisit avec `SYNTRESO_AGENT_MODEL`. Redémarrez après modification.
+- `SYNTRESO_ASSISTANT=non` dans `.env` (redémarrage) ;
+- `"assistant": { "actif": false }` dans `config/reglages.json` (pris en compte sans redémarrer ; rechargez la page).
 
-L'assistant n'a accès qu'aux outils de Syntréso (lecture, simulation, proposition) : ni fichiers, ni commandes, ni Internet.
+Coupé, l'assistant n'envoie rien : le module de l'Agent SDK n'est pas chargé, les routes `/api/agent/*` répondent 503 sans rien lancer, l'interface masque le commentaire du mois. Un test le vérifie à chaque `npm test` (`server/src/services/assistant-interrupteur.test.js`). Pour une installation sans aucun composant d'Anthropic : `npm --prefix server ci --omit=optional`.
+
+**Ce qui part chez Anthropic, et quand** (seulement si l'assistant est allumé) :
+
+- au démarrage du serveur, si elles ne sont pas déjà en cache : l'alerte du jour et le commentaire du mois (`SYNTRESO_SKIP_PREGEN=1` les évite) ;
+- à l'ouverture de l'interface, l'alerte du jour si elle n'est pas encore en cache ;
+- à chaque question posée, et quand vous ouvrez ou régénérez le commentaire du mois.
+
+À chaque fois, le modèle reçoit le résumé de votre trésorerie (`donnees/assistant/DONNEES.md` : nom et ville de l'entreprise, soldes, alertes avec le nom des clients en retard, tableaux mensuels par catégorie, échéances), la mémoire des propositions validées ou rejetées (`MEMOIRE.md`), votre question et le résultat des outils de calcul. Vous êtes responsable de ces données au sens du RGPD ; les conditions d'Anthropic s'appliquent à votre clé.
+
+L'assistant n'a accès qu'aux outils de Syntréso (lecture, simulation, proposition) : ni fichiers, ni commandes, ni Internet. Il ne transmet au programme Claude ni le jeton de Syntréso, ni la clé Twenty, ni aucune autre forme d'accès que la clé d'API.
 
 ---
 
-## 9. Sauvegarde et restauration
+## 11. Sauvegarde et restauration
 
 Tout ce qui compte tient dans trois éléments : le dossier de données, `.env` et `config/reglages.json`.
 
@@ -245,18 +293,18 @@ Copiez les sauvegardes hors de la machine (disque externe, stockage en ligne) : 
 
 ---
 
-## 10. Mise à jour
+## 12. Mise à jour
 
-À la réception d'une nouvelle version du dossier Syntréso :
+Pour passer à une nouvelle version (`git pull`, ou une nouvelle copie du dossier) :
 
-- **Mac** : faites une sauvegarde (section 9), arrêtez Syntréso, remplacez tout **sauf** `donnees/`, `.env`, `config/reglages.json` et `entree-indy/`, puis relancez `./install-mac.sh` (il conserve l'existant).
+- **Mac** : faites une sauvegarde (section 11), arrêtez Syntréso, remplacez tout **sauf** `donnees/`, `.env`, `config/reglages.json` et `entree-indy/`, puis relancez `./install-mac.sh` (il conserve l'existant).
 - **Serveur** : sauvegarde, remplacement des fichiers avec les mêmes exceptions, puis `docker compose up -d --build`.
 
 Comparez `config/reglages.exemple.json` et `.env.exemple` avec vos fichiers : une nouvelle version peut y ajouter des réglages (les absents prennent leur valeur par défaut).
 
 ---
 
-## 11. Sécurité
+## 13. Sécurité
 
 - Syntréso n'écoute que sur `127.0.0.1` : il faut être sur la machine, ou passer par le reverse proxy HTTPS ou un tunnel SSH.
 - Toute requête doit présenter le jeton d'accès (en-tête `Authorization: Bearer ...` pour l'agent, cookie de session après la page de connexion pour le navigateur). Le serveur refuse de démarrer sans jeton.
@@ -266,18 +314,40 @@ Comparez `config/reglages.exemple.json` et `.env.exemple` avec vos fichiers : un
 
 ---
 
-## 12. En cas de problème
+## 14. Limites
+
+- **Comptabilité** : seul le format des exports Indy (grand livre et balance) est lu. Pas de connexion bancaire : la situation est celle du dernier import.
+- **Fiscalité** : règles françaises d'une société à l'IS (TVA, cotisations du gérant non salarié, IS, dividendes). Les taux par défaut sont à faire valider par votre expert-comptable (`donnees/company.json`, voir `docs/REGLAGES.md`). Syntréso n'est pas un logiciel de comptabilité et ne remplace pas votre expert-comptable.
+- **Usage** : un seul dirigeant à la fois, une seule entreprise par installation. Testé sous Linux (Docker et Node.js 22) ; le démarrage automatique sur Mac n'a pas été essayé sur un vrai Mac. Windows n'est pas pris en charge.
+- **Twenty** : les 200 premières opportunités sont lues ; les pondérations par étape sont à régler sur votre pipe.
+- **Assistant** : ses réponses s'appuient sur les chiffres du moteur mais restent générées par une IA, à vérifier avant usage. Si le programme Claude s'arrête au lancement, le serveur peut s'arrêter avec lui (Docker et le démarrage automatique du Mac le relancent).
+
+---
+
+## 15. En cas de problème
 
 | Symptôme | Piste |
 |---|---|
 | Le serveur s'arrête aussitôt : « SYNTRESO_JETON est vide » | Renseigner le jeton dans `.env` (les scripts d'installation le font) |
-| « données absentes ... npm run init » | La base n'est pas créée : section 4 |
+| « données absentes ... npm run init » | La base n'est pas créée : section 6 |
 | Page blanche ou erreurs après une mise à jour | Recharger la page sans cache ; vérifier `web/dist/index.html` |
 | Import : « aucun mouvement bancaire trouvé » | Le compte bancaire n'est pas un 512 : régler `indy.comptesBancaires.courant` |
 | Import : réconciliation « ÉCART » | Un grand livre manque, ou un virement interne n'est pas reconnu (voir `docs/REGLAGES.md`, ouverture et libellés ignorés) |
 | Import : catégorie absente de categories.json | Une règle cite une catégorie qui n'existe pas : corriger la règle ou ajouter la catégorie |
 | Twenty : 503 « non configuré » ou 502 « injoignable » | Vérifier `TWENTY_URL` (sans `/` final), `TWENTY_KEY`, et que le serveur joint Twenty |
-| L'assistant intégré est « désactivé » | Normal sans clé : section 8 |
+| L'assistant intégré est « coupé » | Normal sans clé d'API ou avec l'interrupteur coupé : section 10 |
 | Le port 3900 est déjà pris | Changer `SYNTRESO_PORT` dans `.env` |
 
-Contrôle technique complet (développeurs) : `npm --prefix server ci && npm test` lance la suite de tests du moteur.
+Contrôle technique complet (développeurs) : `npm --prefix server ci && npm test` lance les tests du serveur et ceux du bandeau de l'interface. Après une modification de `web/src`, `npm run build:web` reconstruit l'interface et `node scripts/licences-tierces.mjs` met à jour `LICENCES-TIERCES.md`.
+
+---
+
+## 16. Licence
+
+Copyright (C) 2026 Ludo Sanchez (Synoptïa).
+
+Syntréso est un logiciel libre, distribué sous la licence publique générale GNU Affero, version 3 uniquement ([AGPL-3.0](LICENSE)). Vous pouvez l'utiliser, l'étudier, le modifier et le redistribuer selon ses termes. Si vous modifiez Syntréso et que d'autres personnes l'utilisent à travers un réseau, vous devez leur proposer le code source de votre version (article 13).
+
+Le logiciel est fourni sans aucune garantie, dans les limites prévues par le droit applicable (articles 15 et 16). Aucune assistance n'est due ; les signalements de bogues sont bienvenus, sans promesse de réponse.
+
+Les composants tiers gardent leur propre licence : voir [LICENCES-TIERCES.md](LICENCES-TIERCES.md). Le Claude Agent SDK, utilisé par l'assistant facultatif, n'est pas un logiciel libre et n'est pas inclus dans ce dépôt.
