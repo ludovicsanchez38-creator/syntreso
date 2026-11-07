@@ -1,7 +1,7 @@
 import express, { Router } from 'express'
 import { writeFile, mkdir, rename } from 'node:fs/promises'
 import path from 'node:path'
-import { executerImport, reperer, lireGrandLivre, natureExport } from '../services/import-indy.js'
+import { executerImport, reperer, lireGrandLivre, lireBalance, natureExport } from '../services/import-indy.js'
 import { entreeIndyDir } from '../services/paths.js'
 import { onDataChanged } from '../services/events.js'
 
@@ -15,7 +15,7 @@ router.get('/indy', async (_req, res) => {
     res.json({
       dossier: entreeIndyDir(),
       grandsLivres: grandsLivres.map((g) => {
-        const { premiereDate, derniereDate } = lireGrandLivre(g.texte)
+        const { premiereDate, derniereDate } = lireGrandLivre(g.texte, g.nom)
         return { nom: g.nom, du: premiereDate, au: derniereDate }
       }),
       balance: balance ? balance.nom : null,
@@ -38,6 +38,12 @@ router.put('/indy/fichiers/:nom', express.text({ type: () => true, limit: '25mb'
     const texte = typeof req.body === 'string' ? req.body : ''
     const nature = natureExport(texte)
     if (!nature) return res.status(422).json({ error: 'contenu non reconnu : grand livre ou balance Indy (CSV point-virgule) attendu' })
+    try {
+      if (nature === 'grand-livre') lireGrandLivre(texte, nom)
+      else lireBalance(texte, nom)
+    } catch (err) {
+      return res.status(422).json({ error: err.message })
+    }
     await mkdir(entreeIndyDir(), { recursive: true })
     const cible = path.join(entreeIndyDir(), nom)
     await writeFile(`${cible}.tmp`, texte, 'utf8')

@@ -66,11 +66,19 @@ export function normaliser(s) {
 }
 
 /** « 1 234,56 » (espaces fines ou insécables possibles) -> 123456 centimes. */
-export function cents(s) {
+export function cents(s, { fichier, ligne, colonne } = {}) {
   const t = String(s ?? '').replace(/[\s  ]/g, '').replace(',', '.')
   if (!t) return 0
   const n = Number(t)
-  return Number.isFinite(n) ? Math.round(n * 100) : 0
+  const montant = Math.round(n * 100)
+  if (!Number.isFinite(n) || !Number.isSafeInteger(montant)) {
+    throw new Error(`montant illisible${fichier ? ` : ${fichier}, ligne ${ligne}, colonne ${colonne}` : ''}`)
+  }
+  return montant
+}
+
+function montantsLigne(cellules, fichier, ligne) {
+  return ['Débit', 'Crédit', 'Solde'].map((label, i) => cents(cellules[i + 2], { fichier, ligne, colonne: `${label} (${i + 3})` }))
 }
 
 /** « 05/10/2026 » -> « 2026-10-05 », sinon null. */
@@ -88,12 +96,12 @@ function lignes(texte) {
  * Structure attendue : une ligne d'en-tête par compte « numéro;intitulé;Debit;Credit;Solde »,
  * puis les écritures « JJ/MM/AAAA;libellé;débit;crédit;... », puis « Totaux du poste ... ».
  */
-export function lireGrandLivre(texte) {
+export function lireGrandLivre(texte, nom = 'grand-livre.csv') {
   const comptes = {}
   let cur = null
   let premiereDate = null
   let derniereDate = null
-  for (const brut of lignes(texte)) {
+  for (const [index, brut] of lignes(texte).entries()) {
     const c = splitCsvLine(brut)
     if (c.length < 4) continue
     if (normaliser(c[2]) === 'debit' && normaliser(c[3]) === 'credit') {
@@ -102,13 +110,15 @@ export function lireGrandLivre(texte) {
       continue
     }
     if (normaliser(c[0]).startsWith('totaux du poste')) {
+      montantsLigne(c, nom, index + 1)
       cur = null
       continue
     }
     if (!cur) continue
     const date = isoDate(c[0])
     if (!date) continue
-    comptes[cur].lignes.push({ date, label: (c[1] || '').trim(), debitCents: cents(c[2]), creditCents: cents(c[3]) })
+    const [debitCents, creditCents] = montantsLigne(c, nom, index + 1)
+    comptes[cur].lignes.push({ date, label: (c[1] || '').trim(), debitCents, creditCents })
     if (!premiereDate || date < premiereDate) premiereDate = date
     if (!derniereDate || date > derniereDate) derniereDate = date
   }
@@ -116,14 +126,15 @@ export function lireGrandLivre(texte) {
 }
 
 /** Balance Indy -> { [numero]: solde en centimes (débiteur positif, créditeur négatif) }. */
-export function lireBalance(texte) {
+export function lireBalance(texte, nom = 'balance.csv') {
   const soldes = {}
-  for (const brut of lignes(texte)) {
+  for (const [index, brut] of lignes(texte).entries()) {
     const c = splitCsvLine(brut)
     if (c.length < 5) continue
     const compte = c[0].trim()
     if (!/^\d{3,}$/.test(compte)) continue
-    soldes[compte] = cents(c[4])
+    const [, , soldeCents] = montantsLigne(c, nom, index + 1)
+    soldes[compte] = soldeCents
   }
   return soldes
 }
@@ -207,7 +218,7 @@ export function construireImport({ grandsLivres, balance, reglages, existant = {
 
   // Exercices dans l'ordre chronologique : le plus ancien porte le solde d'ouverture.
   const livres = grandsLivres
-    .map((g) => ({ nom: g.nom, ...lireGrandLivre(g.texte) }))
+    .map((g) => ({ nom: g.nom, ...lireGrandLivre(g.texte, g.nom) }))
     .filter((g) => g.premiereDate)
     .sort((a, b) => (a.premiereDate < b.premiereDate ? -1 : 1))
   if (!livres.length) throw new Error('grand livre illisible : aucune écriture datée trouvée (export Indy « Excel » attendu)')
@@ -281,7 +292,7 @@ export function construireImport({ grandsLivres, balance, reglages, existant = {
   const premiereDate = dateOuverture && dateOuverture < txs[0].date ? dateOuverture : txs[0].date
 
   // --- Balance : soldes réels (réconciliation, réserves, TVA, compte courant d'associé)
-  const soldes = lireBalance(balance.texte)
+  const soldes = lireBalance(balance.texte, balance.nom)
   const somme = (pred) => Object.entries(soldes).reduce((s, [n, v]) => (pred(n) ? s + v : s), 0)
   const present = (pred) => Object.keys(soldes).some(pred)
   const courantCents = somme((n) => estCourant(n) && !estSousCompte(n))
@@ -489,7 +500,7 @@ export async function reperer(dossier) {
     const { mtimeMs } = await stat(chemin)
     const nature = natureExport(texte)
     if (nature === 'grand-livre') {
-      const { derniereDate } = lireGrandLivre(texte)
+      const { derniereDate } = lireGrandLivre(texte, nom)
       const exercice = derniereDate ? derniereDate.slice(0, 4) : nom
       const actuel = livres.get(exercice)
       if (!actuel || mtimeMs > actuel.mtime || (mtimeMs === actuel.mtime && nom > actuel.nom)) {
