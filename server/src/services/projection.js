@@ -10,7 +10,7 @@
 //
 // Dates : chaînes 'YYYY-MM-DD' comparées lexicographiquement. Montants : centimes entiers.
 
-import { readJson } from './store.js'
+import { readJson, withDataSnapshot } from './store.js'
 import { monthOf, daysInMonth, endOfMonth, addMonths, monthRange, addDays, todayFor } from './dates.js'
 import { horizonEnd as horizonEndOf, gridStart } from './horizon.js'
 import {
@@ -35,16 +35,18 @@ const BURN_LOOKBACK_MONTHS = 6
 export { monthOf, daysInMonth, endOfMonth, addMonths, monthRange, addDays, todayFor }
 
 export async function loadState() {
-  const [company, accounts, categories, transactions, invoices, forecast, scenarios] = await Promise.all([
-    readJson('company'),
-    readJson('accounts'),
-    readJson('categories'),
-    readJson('transactions'),
-    readJson('invoices'),
-    readJson('forecast'),
-    readJson('scenarios'),
-  ])
-  return { company, accounts, categories, transactions, invoices, forecast, scenarios }
+  return withDataSnapshot(async () => {
+    const [company, accounts, categories, transactions, invoices, forecast, scenarios] = await Promise.all([
+      readJson('company'),
+      readJson('accounts'),
+      readJson('categories'),
+      readJson('transactions'),
+      readJson('invoices'),
+      readJson('forecast'),
+      readJson('scenarios'),
+    ])
+    return { company, accounts, categories, transactions, invoices, forecast, scenarios }
+  })
 }
 
 // ------------------------------------------------------------------ Agrégats

@@ -15,14 +15,14 @@
 // Le module est découpé en fonctions pures (lecture CSV, calcul) testables sans disque,
 // et une fonction d'exécution qui écrit sous le verrou de données du serveur.
 
-import { readFile, readdir, stat, writeFile, rename, mkdir } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 import { existsSync } from 'node:fs'
 import path from 'node:path'
 import { lireReglages } from './reglages.js'
 import { robustMonthlyOut } from './charges.js'
 import { addMonths, monthRange, todayISO, monthOf } from './dates.js'
 import { horizonEnd } from './horizon.js'
-import { dataPath, withDataLock, appendAuditInLock, readJsonOr } from './store.js'
+import { withDataLock, writeJsonBatchInLock, appendAuditInLock, readJsonOr } from './store.js'
 
 const SOURCE_IMPORT = 'indy-import'
 
@@ -512,14 +512,6 @@ export async function reperer(dossier) {
   return { grandsLivres: [...livres.values()], balance, ignores }
 }
 
-async function ecrireAtomique(nom, data) {
-  const cible = dataPath(nom)
-  await mkdir(path.dirname(cible), { recursive: true })
-  const tmp = `${cible}.tmp`
-  await writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8')
-  await rename(tmp, cible)
-}
-
 /**
  * Exécute l'import : lit les fichiers, calcule, et (hors simulation) écrit les données
  * sous le verrou du serveur. Retourne le rapport.
@@ -561,13 +553,11 @@ export async function executerImport(options = {}) {
     const rapport = { ...resultat.rapport, fichiersIgnores: entrees.ignores, simulation: Boolean(options.simulation) }
     if (options.simulation) return rapport
 
-    await ecrireAtomique('transactions', resultat.transactions)
-    await ecrireAtomique('accounts', resultat.accounts)
-    await ecrireAtomique('company', resultat.company)
-    await ecrireAtomique('forecast', resultat.forecast)
+    const documents = { transactions: resultat.transactions, accounts: resultat.accounts, company: resultat.company, forecast: resultat.forecast }
     for (const nom of ['invoices', 'proposals', 'scenarios', 'echeances']) {
-      if (!existsSync(dataPath(nom))) await ecrireAtomique(nom, [])
+      if (await readJsonOr(nom, null) === null) documents[nom] = []
     }
+    await writeJsonBatchInLock(documents)
     await appendAuditInLock({
       actor: 'import',
       action: 'import.run',

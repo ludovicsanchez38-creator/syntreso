@@ -18,7 +18,7 @@
 //   si une génération est déjà en cours.
 
 import { spawn } from 'node:child_process'
-import { readJsonOr, writeJson, withDataLock, appendAuditInLock, updateJson, appendAudit } from './store.js'
+import { readJsonOr, writeJson, withDataLock, writeJsonBatchInLock, appendAuditInLock, updateJson, appendAudit } from './store.js'
 import { loadState, monthOf, monthRange, todayFor } from './projection.js'
 import { autoManagedCategoryIds } from './fiscal.js'
 import { horizonEnd } from './horizon.js'
@@ -379,10 +379,7 @@ export function resolveProposal(id, action, amendments = {}) {
   return withDataLock(() => doResolveProposal(id, action, amendments))
 }
 
-// NB : doResolveProposal s'exécute DÉJÀ dans la section critique (appelée via
-// withDataLock). Elle utilise donc les lectures/écritures bas niveau de store.js sans
-// re-prendre le verrou (writeJson le reprendrait : réentrance interdite, deadlock).
-// On lit/écrit en direct via fs ici, encadrés par le verrou parent.
+// Déjà sous withDataLock : le commit coordonné réutilise le verrou parent.
 async function doResolveProposal(id, action, amendments = {}) {
   const proposals = await readJsonOr('proposals', [])
   const proposal = proposals.find((p) => p.id === id)
@@ -391,7 +388,7 @@ async function doResolveProposal(id, action, amendments = {}) {
 
   if (action === 'reject') {
     proposal.status = 'rejected'
-    await writeProposalsRaw(proposals)
+    await writeJsonBatchInLock({ proposals })
     await appendAuditInLock({
       actor: 'user',
       action: 'proposal.reject',
@@ -402,6 +399,8 @@ async function doResolveProposal(id, action, amendments = {}) {
     return { proposal }
   }
 
+  let forecast
+  let mutationAudit
   if (proposal.kind === 'forecast_line') {
     // seuls le montant et le mois sont amendables (jamais kind/categoryId via l'API)
     const allowed = {}
@@ -411,7 +410,7 @@ async function doResolveProposal(id, action, amendments = {}) {
     const invalid = await validateProposal(payload)
     if (invalid) return { error: invalid, status: 400 }
 
-    const forecast = await readForecastRaw()
+    forecast = await readJsonOr('forecast', [])
     // Catégorie pilotée par le moteur (TVA/URSSAF/IS dérivées) : l'ajustement validé
     // vit dans SA propre ligne (suffixe _agent), jamais fusionné avec la moyenne
     // importée - sinon le moteur ne peut plus distinguer le mort (neutralisé) du
@@ -428,17 +427,15 @@ async function doResolveProposal(id, action, amendments = {}) {
     } else {
       forecast.push({ id: fcId, month: payload.month, categoryId: payload.categoryId, amountCents: payload.amountCents, note: payload.label, source: 'agent' })
     }
-    await writeForecastRaw(forecast)
     proposal.payload = payload
-    await appendAuditInLock({
+    mutationAudit = {
       actor: 'agent',
       action: 'forecast.upsert',
       target: fcId,
       before,
       after: { amountCents: existing ? existing.amountCents : payload.amountCents },
       meta: { proposalId: proposal.id, label: payload.label },
-    })
-    await onDataChanged()
+    }
   }
 
   if (proposal.kind === 'forecast_recalage') {
@@ -449,7 +446,7 @@ async function doResolveProposal(id, action, amendments = {}) {
     const invalid = await validateProposal(payload)
     if (invalid) return { error: invalid, status: 400 }
 
-    const forecast = await readForecastRaw()
+    forecast = await readJsonOr('forecast', [])
     for (const mo of monthRange(payload.fromMonth, payload.toMonth)) {
       const fcId = `fc_${mo}_${payload.categoryId}`
       const idx = forecast.findIndex((f) => f.id === fcId)
@@ -463,20 +460,22 @@ async function doResolveProposal(id, action, amendments = {}) {
         forecast.push({ id: fcId, month: mo, categoryId: payload.categoryId, amountCents: payload.monthlyCents, note: payload.label, source: 'recalage' })
       }
     }
-    await writeForecastRaw(forecast)
     proposal.payload = payload
-    await appendAuditInLock({
+    mutationAudit = {
       actor: 'agent',
       action: 'forecast.recalage',
       target: payload.categoryId,
       meta: { proposalId: proposal.id, monthlyCents: payload.monthlyCents, fromMonth: payload.fromMonth, toMonth: payload.toMonth },
-    })
-    await onDataChanged()
+    }
   }
 
   proposal.status = 'confirmed'
   proposal.resolvedAt = new Date().toISOString()
-  await writeProposalsRaw(proposals)
+  await writeJsonBatchInLock({ ...(forecast ? { forecast } : {}), proposals })
+  if (mutationAudit) {
+    await appendAuditInLock(mutationAudit)
+    await onDataChanged()
+  }
   await appendAuditInLock({
     actor: 'user',
     action: 'proposal.confirm',
@@ -502,29 +501,6 @@ function describeProposal(proposal) {
     return `${p.label || 'recalage de charge'} (${p.categoryId}, ${p.fromMonth} -> ${p.toMonth}, ${eur})`
   }
   return proposal.kind
-}
-
-// --- I/O bas niveau (déjà sous verrou via resolveProposal -> withDataLock). On évite
-// writeJson (qui re-prendrait le verrou : deadlock par réentrance) en écrivant
-// atomiquement à la main. Lectures via readJsonOr (sans verrou, sûres en lecture).
-async function readForecastRaw() {
-  return readJsonOr('forecast', [])
-}
-async function writeForecastRaw(forecast) {
-  await writeRawAtomic('forecast', forecast)
-}
-async function writeProposalsRaw(proposals) {
-  await writeRawAtomic('proposals', proposals)
-}
-async function writeRawAtomic(name, data) {
-  const { dataPath } = await import('./store.js')
-  const { writeFile, rename, mkdir } = await import('node:fs/promises')
-  const path = await import('node:path')
-  const target = dataPath(name)
-  await mkdir(path.dirname(target), { recursive: true })
-  const tmp = `${target}.tmp`
-  await writeFile(tmp, JSON.stringify(data, null, 2) + '\n', 'utf8')
-  await rename(tmp, target)
 }
 
 // ------------------------------------------------------------------ Contenus pré-générés (alerte proactive, commentaire du mois)

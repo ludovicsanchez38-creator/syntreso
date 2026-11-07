@@ -19,7 +19,7 @@
 //   - Idempotence : on ne recrée pas une proposition Twenty identique déjà en attente
 //     pour le même mois (sinon chaque synchronisation empilerait des doublons).
 
-import { readJsonOr, readJson, updateJson, appendAudit } from './store.js'
+import { readJsonOr, readJson, updateJson, appendAudit, withDataSnapshot } from './store.js'
 import { monthOf, addMonths, monthRange, todayFor } from './dates.js'
 import { horizonEnd } from './horizon.js'
 import { lireReglages, REGLAGES_PAR_DEFAUT } from './reglages.js'
@@ -355,10 +355,12 @@ async function touchTwentyImportedAt() {
 // Lecture d'état minimale pour le sync (company + forecast). On ne dépend pas de
 // projection.loadState (qui charge tout) pour rester léger et éviter d'importer le moteur.
 async function loadStateLight() {
-  const [company, forecast, categories] = await Promise.all([
-    readJson('company'),
-    readJson('forecast'),
-    readJsonOr('categories', []),
-  ])
-  return { company, forecast, categories }
+  return withDataSnapshot(async () => {
+    const [company, forecast, categories] = await Promise.all([
+      readJson('company'),
+      readJson('forecast'),
+      readJsonOr('categories', []),
+    ])
+    return { company, forecast, categories }
+  })
 }

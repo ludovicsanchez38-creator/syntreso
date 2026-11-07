@@ -1,5 +1,5 @@
 import { Router } from 'express'
-import { readJson, updateJson } from '../services/store.js'
+import { readJson, updateJson, withDataSnapshot } from '../services/store.js'
 import { addMonths, monthOf, todayFor } from '../services/dates.js'
 
 const router = Router()
@@ -24,7 +24,7 @@ function resoudreBornes(scenarios, currentMonth) {
 
 router.get('/', async (_req, res, next) => {
   try {
-    const [scenarios, company] = await Promise.all([readJson('scenarios'), readJson('company')])
+    const [scenarios, company] = await withDataSnapshot(() => Promise.all([readJson('scenarios'), readJson('company')]))
     res.json(resoudreBornes(scenarios, monthOf(todayFor(company))))
   } catch (err) {
     next(err)
