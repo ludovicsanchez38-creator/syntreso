@@ -12,7 +12,7 @@
     "init": "node scripts/init-base.mjs",
     "demo": "node scripts/demo.mjs",
     "import": "node scripts/import-indy.mjs",
-    "test": "npm --prefix server test",
+    "test": "npm --prefix server test && node --test 'web/test/*.test.ts'",
     "installer:serveur": "npm --prefix server ci --omit=dev",
     "build:web": "npm --prefix web ci && npm --prefix web run build",
     "dev": "concurrently -n api,web -c green,blue \"npm --prefix server run dev\" \"npm --prefix web run dev\""

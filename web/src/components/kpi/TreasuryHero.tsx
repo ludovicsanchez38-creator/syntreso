@@ -3,12 +3,8 @@ import { Card, CardContent } from '@/components/ui/card'
 import { useCashCalendar, type Company, type Echeance, type Kpis } from '@/lib/api'
 import { formatCents } from '@/lib/money'
 import { formatDate, formatDateShort, formatMonth } from '@/lib/dates'
+import { bandeauTresorerie, dot, type Tone } from '@/lib/bandeau'
 import { cn } from '@/lib/utils'
-
-type Tone = 'positive' | 'warning' | 'destructive'
-
-// Termine une phrase sans doubler le point d'une date abrégée (« 4 oct. »).
-const dot = (s: string) => (s.endsWith('.') ? s : `${s}.`)
 
 const TONE_ICON: Record<Tone, typeof CircleCheck> = { positive: CircleCheck, warning: CircleAlert, destructive: CircleX }
 
@@ -58,15 +54,9 @@ export function TreasuryHero({ kpis, company }: { kpis: Kpis; company: Company }
   const cal = useCashCalendar(90)
   const threshold = kpis.lowCashThresholdCents
   const low = kpis.lowPoint90
-  const tone: Tone = !low || low.cents >= threshold ? 'positive' : low.cents >= 0 ? 'warning' : 'destructive'
+  // point bas, puis disponible net : « Pas de creux en vue » seulement si les deux tiennent
+  const { tone, headline } = bandeauTresorerie(kpis)
   const Icon = TONE_ICON[tone]
-
-  const headline =
-    tone === 'positive'
-      ? 'Pas de creux en vue sur 90 jours, selon le prévisionnel.'
-      : tone === 'warning'
-        ? dot(`Point bas sous le seuil de sécurité dans les 90 jours : ${formatCents(low!.cents)} le ${formatDateShort(low!.date)}`)
-        : dot(`La trésorerie projetée passe sous zéro dans les 90 jours : ${formatCents(low!.cents)} le ${formatDateShort(low!.date)}`)
 
   const next = cal.data?.items.find((e) => e.amountCents < 0)
   let nextSentence = ''

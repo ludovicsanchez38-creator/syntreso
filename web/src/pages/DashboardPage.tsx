@@ -43,8 +43,6 @@ export default function DashboardPage() {
 
   const { company, kpis, alerts, dataFreshness } = state.data
   const proj = projection.data
-  // Le seuil du net disponible est déjà dit par le bandeau : pas de doublon ici.
-  const toWatch = alerts.filter((a) => a.kind !== 'net_below_threshold')
 
   return (
     <div className="flex flex-col gap-5 p-4 sm:p-6">
@@ -121,7 +119,7 @@ export default function DashboardPage() {
             <p className="mt-1 text-xs text-muted-foreground">Ce qui sort de l'ordinaire.</p>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
-            <AlertsList alerts={toWatch} />
+            <AlertsList alerts={alerts} />
             <div className="flex gap-8 border-t pt-3 text-xs text-muted-foreground">
               <div>
                 Encaissé sur 30 jours
