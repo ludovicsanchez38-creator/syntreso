@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { MessageCircleQuestion, Sparkles } from 'lucide-react'
 import {
+  Command,
   CommandDialog,
   CommandEmpty,
   CommandGroup,
@@ -50,42 +51,45 @@ export function AgentCommandBar() {
 
   return (
     <CommandDialog open={open} onOpenChange={setOpen} title="Assistant Syntréso" description="Posez votre question">
-      <CommandInput
-        placeholder="Posez une question à votre trésorerie..."
-        value={value}
-        onValueChange={setValue}
-      />
-      {!available && (
-        <p className="border-b px-4 py-2 text-xs text-muted-foreground">
-          L'assistant IA est coupé{unavailableReason ? ` : ${unavailableReason}` : ''}.
-        </p>
-      )}
-      {busyHint && (
-        <p className="border-b px-4 py-2 text-xs text-destructive">
-          L'assistant rédige déjà une réponse : attendez la fin avant d'envoyer une nouvelle question.
-        </p>
-      )}
-      <CommandList>
-        <CommandEmpty>{available ? 'Appuyez sur Entrée pour envoyer votre question.' : 'Aucune question possible tant que l’assistant est coupé.'}</CommandEmpty>
-        {available && value.trim() && (
-          <CommandGroup heading="Votre question">
-            <CommandItem onSelect={() => send(value.trim())} value={`ask-${value}`}>
-              <Sparkles className="size-4 text-primary" />
-              {value.trim()}
-            </CommandItem>
-          </CommandGroup>
+      {/* CommandDialog ne fournit pas la racine cmdk : sans <Command>, l'ouverture plantait la page */}
+      <Command>
+        <CommandInput
+          placeholder="Posez une question à votre trésorerie..."
+          value={value}
+          onValueChange={setValue}
+        />
+        {!available && (
+          <p className="border-b px-4 py-2 text-xs text-muted-foreground">
+            L'assistant IA est coupé{unavailableReason ? ` : ${unavailableReason}` : ''}.
+          </p>
         )}
-        {available && (
-          <CommandGroup heading="Suggestions">
-            {SUGGESTIONS.map((s) => (
-              <CommandItem key={s} onSelect={() => send(s)} value={s}>
-                <MessageCircleQuestion className="size-4 text-muted-foreground" />
-                {s}
+        {busyHint && (
+          <p className="border-b px-4 py-2 text-xs text-destructive">
+            L'assistant rédige déjà une réponse : attendez la fin avant d'envoyer une nouvelle question.
+          </p>
+        )}
+        <CommandList>
+          <CommandEmpty>{available ? 'Appuyez sur Entrée pour envoyer votre question.' : 'Aucune question possible tant que l’assistant est coupé.'}</CommandEmpty>
+          {available && value.trim() && (
+            <CommandGroup heading="Votre question">
+              <CommandItem onSelect={() => send(value.trim())} value={`ask-${value}`}>
+                <Sparkles className="size-4 text-primary" />
+                {value.trim()}
               </CommandItem>
-            ))}
-          </CommandGroup>
-        )}
-      </CommandList>
+            </CommandGroup>
+          )}
+          {available && (
+            <CommandGroup heading="Suggestions">
+              {SUGGESTIONS.map((s) => (
+                <CommandItem key={s} onSelect={() => send(s)} value={s}>
+                  <MessageCircleQuestion className="size-4 text-muted-foreground" />
+                  {s}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          )}
+        </CommandList>
+      </Command>
     </CommandDialog>
   )
 }
