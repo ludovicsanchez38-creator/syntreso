@@ -643,12 +643,4 @@ if (errors.length) {
   process.exit(1)
 }
 console.log('Invariants OK.')
-
-// si le serveur tourne, resynchroniser le digest de l'agent (sinon il resterait
-// sur les anciennes données jusqu'au prochain restart ou mutation)
-try {
-  await fetch('http://localhost:3001/api/agent/digest', { method: 'POST' })
-  console.log('Digest agent resynchronisé.')
-} catch {
-  // serveur arrêté : le digest sera régénéré au boot
-}
+// Le serveur, s'il tourne, est prévenu par scripts/demo.mjs (port et jeton de .env).

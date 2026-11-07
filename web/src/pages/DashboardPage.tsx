@@ -51,7 +51,7 @@ export default function DashboardPage() {
           <h1 className="font-heading text-xl font-semibold tracking-tight">Tableau de bord</h1>
           <p className="mt-0.5 text-sm text-muted-foreground">
             {company.name} - {company.location}
-            {company.employees > 0 ? ` - ${company.employees} salariés` : ''}
+            {company.employees > 0 ? ` - ${company.employees} salarié${company.employees > 1 ? 's' : ''}` : ''}
           </p>
           <div className="mt-1.5">
             <DataFreshnessBanner freshness={dataFreshness} />
