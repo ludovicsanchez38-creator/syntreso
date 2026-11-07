@@ -2,8 +2,8 @@
   "name": "syntreso",
   "version": "1.0.0",
   "description": "Syntréso - pilotage de trésorerie pour TPE (compta Indy, CRM Twenty, assistant IA optionnel)",
-  "private": true,
-  "license": "UNLICENSED",
+  "author": "Ludo Sanchez (Synoptïa)",
+  "license": "AGPL-3.0-only",
   "engines": {
     "node": ">=22"
   },

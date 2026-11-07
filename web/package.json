@@ -45,5 +45,6 @@
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"
   },
-  "description": "Syntréso - interface web"
+  "description": "Syntréso - interface web",
+  "license": "AGPL-3.0-only"
 }
